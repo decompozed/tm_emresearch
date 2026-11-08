@@ -1,0 +1,2 @@
+# Base32 of the public test seed from RFC 6238 Appendix B, not a secret
+aa6b91e53c03597867a438b03d94bc1b2873f206:Tests/TwoFactor/TotpTests.cpp:generic-api-key:16
