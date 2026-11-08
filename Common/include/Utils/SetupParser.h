@@ -65,6 +65,7 @@ namespace Common
             std::string ip;
             std::uint32_t port;
             std::string jwtToken;
+            std::string jwtTokenPrevious; // optional, only accepted when verifying (rotation overlap)
             std::vector<std::string> allowedOrigins;
         };
 

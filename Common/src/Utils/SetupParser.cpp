@@ -21,6 +21,7 @@
 #include "../../include/Utils/Utils.h"
 #include "../../include/Utils/Logger.h"
 #include "../../include/Utils/SetupParser.h"
+#include "../../include/Utils/SecretSource.h"
 #include <regex>
 
 
@@ -29,6 +30,40 @@ namespace Common
 {
     namespace Utils
     {
+        // A secret comes from the environment variable NAME or from the file named by NAME_FILE (see SecretSource.h).
+        // A check function reports a problem and returns false; the getters run after the checks, so a wrong file stops the server here.
+        static bool secretUsable(const std::string& name, const std::string& caller, std::string& value)
+        {
+            const SecretSource::Result result = SecretSource::read(name);
+            if (result.origin == SecretSource::Origin::Error)
+            {
+                ::Utils::Logger::log(result.error, ::Utils::LogType::Error, caller);
+                return false;
+            }
+            if (!result.ok())
+            {
+                ::Utils::Logger::log("Environment variable not set: " + name + " (or " + name + "_FILE)", ::Utils::LogType::Error, caller);
+                return false;
+            }
+            value = result.value;
+            return true;
+        }
+
+        static std::optional<std::string> readSecretOrStop(const std::string& name, const std::string& caller)
+        {
+            const SecretSource::Result result = SecretSource::read(name);
+            if (result.origin == SecretSource::Origin::Error)
+            {
+                ::Utils::Logger::log(result.error, ::Utils::LogType::Error, caller);
+                std::terminate();
+            }
+            if (!result.ok())
+            {
+                return std::nullopt;
+            }
+            return result.value;
+        }
+
         SetupParser::SetupParser()
         {
             m_iniFile.load("../Setup/config.ini");
@@ -205,9 +240,9 @@ namespace Common
                 return false;
             }
 
-            if (!std::getenv(passwordEnv.c_str()))
+            std::string password;
+            if (!secretUsable(passwordEnv, "SetupParser::checkDatabaseConfig", password))
             {
-                ::Utils::Logger::log("Environment variable " + passwordEnv + " has not been set!", ::Utils::LogType::Error, "SetupParser::checkDatabaseConfig");
                 return false;
             }
             return true;
@@ -233,6 +268,28 @@ namespace Common
             {
                 ::Utils::Logger::log("JwtTokenEnvironmentName missing or empty in config.ini",::Utils::LogType::Error,"SetupParser::checkWebsiteConfig");
                 return false;
+            }
+
+            std::string jwtKey;
+            if (!secretUsable(website["JwtTokenEnvironmentName"].as<std::string>(), "SetupParser::checkWebsiteConfig", jwtKey))
+            {
+                return false;
+            }
+            if (jwtKey.empty())
+            {
+                ::Utils::Logger::log("The JWT secret is empty", ::Utils::LogType::Error, "SetupParser::checkWebsiteConfig");
+                return false;
+            }
+
+            // Optional: the key that was valid before a rotation, accepted for tokens that are still in circulation
+            if (website.contains("JwtTokenPreviousEnvironmentName") && !website["JwtTokenPreviousEnvironmentName"].as<std::string>().empty())
+            {
+                const SecretSource::Result previous = SecretSource::read(website["JwtTokenPreviousEnvironmentName"].as<std::string>());
+                if (previous.origin == SecretSource::Origin::Error)
+                {
+                    ::Utils::Logger::log(previous.error, ::Utils::LogType::Error, "SetupParser::checkWebsiteConfig");
+                    return false;
+                }
             }
 
             if (!website.contains("AllowedOrigins") || website["AllowedOrigins"].as<std::string>().empty())
@@ -290,11 +347,9 @@ namespace Common
             {
                 return true;
             }
-            const char* value = std::getenv(environmentName.c_str());
-            if (value == nullptr)
+            std::string value;
+            if (!secretUsable(environmentName, "SetupParser::checkIpcConfig", value))
             {
-                ::Utils::Logger::log("[Ipc] SecretEnvironmentName is set but the environment variable " + environmentName + " is not",
-                    ::Utils::LogType::Error, "SetupParser::checkIpcConfig");
                 return false;
             }
             const std::string hex = trim(value);
@@ -311,12 +366,12 @@ namespace Common
         {
             IpcSetup setup;
             const std::string environmentName = ipcSecretEnvironmentName();
-            const char* value = environmentName.empty() ? nullptr : std::getenv(environmentName.c_str());
-            if (value == nullptr)
+            const std::optional<std::string> value = environmentName.empty() ? std::nullopt : readSecretOrStop(environmentName, "SetupParser::getIpcSetupImpl");
+            if (!value)
             {
                 return setup;
             }
-            const std::string hex = trim(value);
+            const std::string hex = trim(*value);
             setup.secret.resize(hex.size() / 2);
             CryptoPP::StringSource source(hex, true, new CryptoPP::HexDecoder(new CryptoPP::ArraySink(setup.secret.data(), setup.secret.size())));
             return setup;
@@ -401,16 +456,16 @@ namespace Common
                 return std::nullopt;
             }
 
-            const char* keyHex = std::getenv(section[setting].as<std::string>().c_str());
+            const std::optional<std::string> keyHex = readSecretOrStop(section[setting].as<std::string>(), "SetupParser::readPepperKey");
             if (!keyHex)
             {
                 return std::nullopt;
             }
 
             std::string decoded;
-            if (std::strlen(keyHex) == PasswordHash::pepperBytes * 2)
+            if (keyHex->size() == PasswordHash::pepperBytes * 2)
             {
-                CryptoPP::StringSource ss(keyHex, true, new CryptoPP::HexDecoder(new CryptoPP::StringSink(decoded)));
+                CryptoPP::StringSource ss(*keyHex, true, new CryptoPP::HexDecoder(new CryptoPP::StringSink(decoded)));
             }
 
             if (decoded.size() != PasswordHash::pepperBytes)
@@ -456,11 +511,11 @@ namespace Common
                 // Without a valid key it stays empty and the feature is reported as unavailable.
                 if (m_iniFile.contains("General") && m_iniFile["General"].contains("2faSecret"))
                 {
-                    const char* keyHex = std::getenv(m_iniFile["General"]["2faSecret"].as<std::string>().c_str());
-                    if (keyHex && std::strlen(keyHex) == 64)
+                    const std::optional<std::string> keyHex = readSecretOrStop(m_iniFile["General"]["2faSecret"].as<std::string>(), "SetupParser::getGeneralSetupImpl");
+                    if (keyHex && keyHex->size() == 64)
                     {
                         std::string decoded;
-                        CryptoPP::StringSource ss(keyHex, true, new CryptoPP::HexDecoder(new CryptoPP::StringSink(decoded)));
+                        CryptoPP::StringSource ss(*keyHex, true, new CryptoPP::HexDecoder(new CryptoPP::StringSink(decoded)));
                         if (decoded.size() == 32)
                         {
                             generalSetup.twoFaSecret.Assign(reinterpret_cast<const CryptoPP::byte*>(decoded.data()), decoded.size());
@@ -476,9 +531,9 @@ namespace Common
             const std::string twoFaSecretEnv = section["2faSecret"].as<std::string>();
             const std::string emailTokenEnv = section["EmailToken"].as<std::string>();
 
-            const char* emailSecretVal = std::getenv(emailSecretEnv.c_str());
-            const char* twoFaSecretVal = std::getenv(twoFaSecretEnv.c_str());
-            const char* emailTokenVal = std::getenv(emailTokenEnv.c_str());
+            const std::string emailSecretVal = readSecretOrStop(emailSecretEnv, "SetupParser::getGeneralSetupImpl").value_or("");
+            const std::string twoFaSecretVal = readSecretOrStop(twoFaSecretEnv, "SetupParser::getGeneralSetupImpl").value_or("");
+            const std::string emailTokenVal = readSecretOrStop(emailTokenEnv, "SetupParser::getGeneralSetupImpl").value_or("");
 
             generalSetup.emailSecret.resize(32);
             generalSetup.twoFaSecret.resize(32);
@@ -548,10 +603,9 @@ namespace Common
                 return false;
             }
 
-            const char* emailSecretVal = std::getenv(emailSecretEnv.c_str());
-            if (!emailSecretVal)
+            std::string emailSecretVal;
+            if (!secretUsable(emailSecretEnv, "SetupParser::checkGeneralConfig", emailSecretVal))
             {
-                ::Utils::Logger::log("Environment variable not set: " + emailSecretEnv,::Utils::LogType::Error,"SetupParser::checkGeneralConfig");
                 return false;
             }
 
@@ -579,10 +633,9 @@ namespace Common
                 return false;
             }
 
-            const char* twoFaSecretVal = std::getenv(twoFaSecretEnv.c_str());
-            if (!twoFaSecretVal)
+            std::string twoFaSecretVal;
+            if (!secretUsable(twoFaSecretEnv, "SetupParser::checkGeneralConfig", twoFaSecretVal))
             {
-                ::Utils::Logger::log("Environment variable not set: " + twoFaSecretEnv,::Utils::LogType::Error,"SetupParser::checkGeneralConfig");
                 return false;
             }
 
@@ -769,8 +822,7 @@ namespace Common
             db.username = m_iniFile["Database"]["Username"].as<std::string>();
 
             std::string envVarName = m_iniFile["Database"]["PasswordEnvironmentName"].as<std::string>();
-            const char* envPassword = std::getenv(envVarName.c_str());
-            db.password = envPassword ? envPassword : "";
+            db.password = readSecretOrStop(envVarName, "SetupParser::getDatabaseSetupImpl").value_or("");
 
             return db;
         }
@@ -785,12 +837,17 @@ namespace Common
             website.port = section["Port"].as<std::uint32_t>();
 
             std::string jwtEnvName = section["JwtTokenEnvironmentName"].as<std::string>();
-            const char* jwtEnvValue = std::getenv(jwtEnvName.c_str());
+            const std::optional<std::string> jwtEnvValue = readSecretOrStop(jwtEnvName, "SetupParser::getWebsiteSetupImpl");
             if (jwtEnvValue)
-                website.jwtToken = jwtEnvValue;
+                website.jwtToken = *jwtEnvValue;
             else
             {
                 ::Utils::Logger::log("Environment variable for JwtTokenEnvironmentName (" + jwtEnvName + ") not set",::Utils::LogType::Error,"SetupParser::getWebsiteSetupImpl");
+            }
+
+            if (section.contains("JwtTokenPreviousEnvironmentName") && !section["JwtTokenPreviousEnvironmentName"].as<std::string>().empty())
+            {
+                website.jwtTokenPrevious = readSecretOrStop(section["JwtTokenPreviousEnvironmentName"].as<std::string>(), "SetupParser::getWebsiteSetupImpl").value_or("");
             }
 
             website.allowedOrigins.clear();
