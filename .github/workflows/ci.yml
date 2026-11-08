@@ -61,12 +61,13 @@ jobs:
       - name: Analyse the server code
         run: |
           cppcheck --version
-          cppcheck -j "$(nproc)" --quiet --language=c++ --std=c++20 --enable=warning \
-            --suppress=missingInclude --suppress=unmatchedSuppression --inline-suppr \
-            -I Common/include -I Common -I AuthServer/include -I MainServer/include -I CastServer/include \
+          cppcheck -j "$(nproc)" --quiet --language=c++ --std=c++20 --enable=warning --error-exitcode=1 \
+            --suppress=missingInclude --suppress=unmatchedSuppression --suppressions-list=.cppcheck-suppressions --inline-suppr \
+            -I Common/include -I Common/include/Utils -I Common -I AuthServer/include -I MainServer/include -I CastServer/include \
             --xml --output-file=cppcheck.xml AuthServer Common MainServer CastServer
 
       - name: Summarise the findings
+        if: always()
         run: |
           python3 - <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
           import collections
@@ -81,10 +82,46 @@ jobs:
           PY
 
       - name: Keep the report
+        if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: cppcheck-report
           path: cppcheck.xml
+
+  fuzz:
+    name: Fuzz the parsers (libFuzzer, 60 s each)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install clang
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends clang-18 libclang-rt-18-dev libcrypto++-dev
+
+      - name: Build the fuzz targets
+        run: |
+          FLAGS="-std=c++2b -g -O1 -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=undefined -IExternalLibraries -ICommon -ICommon/include -ICommon/include/Utils"
+          clang++-18 $FLAGS Tools/fuzz/packet_fuzz.cpp Common/src/Protocol/TcpHeader.cpp -o packet_fuzz
+          clang++-18 $FLAGS Tools/fuzz/text_fuzz.cpp -lcryptopp -o text_fuzz
+
+      - name: Fuzz the packet parser
+        run: mkdir -p corpus/packet && ./packet_fuzz -max_total_time=60 -print_final_stats=1 -artifact_prefix=crash-packet- corpus/packet 2>&1 | tail -25 | tee packet-fuzz.txt
+
+      - name: Fuzz the log text handling
+        run: mkdir -p corpus/text && ./text_fuzz -max_total_time=60 -print_final_stats=1 -artifact_prefix=crash-text- corpus/text 2>&1 | tail -25 | tee text-fuzz.txt
+
+      - name: Keep the results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: fuzz-results
+          path: |
+            packet-fuzz.txt
+            text-fuzz.txt
+            crash-*
+          if-no-files-found: ignore
 
   build-test:
     name: Build, unit tests and SBOM (Linux, gcc-14)
@@ -190,7 +227,8 @@ jobs:
         uses: anchore/scan-action@27805bf3b4e84b4a5c980df22ed233c00390a439 # v7.4.2
         with:
           sbom: sbom.spdx.json
-          fail-build: false
+          fail-build: true
+          severity-cutoff: high
           output-format: json
 
       - name: Scan the repository SBOM (Grype)
@@ -198,10 +236,12 @@ jobs:
         uses: anchore/scan-action@27805bf3b4e84b4a5c980df22ed233c00390a439 # v7.4.2
         with:
           sbom: sbom.cdx.json
-          fail-build: false
+          fail-build: true
+          severity-cutoff: high
           output-format: json
 
       - name: Summarise the findings
+        if: always()
         env:
           VCPKG_REPORT: ${{ steps.scan-vcpkg.outputs.json }}
           REPO_REPORT: ${{ steps.scan-repo.outputs.json }}
@@ -209,6 +249,9 @@ jobs:
           python3 - <<'PY' | tee -a "$GITHUB_STEP_SUMMARY" | tee scan-summary.txt
           import collections, json, os
           for title, variable in (('vcpkg SBOM', 'VCPKG_REPORT'), ('repository SBOM', 'REPO_REPORT')):
+              if not os.environ.get(variable):
+                  print(f'### {title}: no report')
+                  continue
               data = json.load(open(os.environ[variable]))
               matches = data.get('matches', [])
               counts = collections.Counter(m['vulnerability']['severity'] for m in matches)
@@ -218,10 +261,11 @@ jobs:
               for m in sorted(matches, key=lambda x: x['vulnerability']['id'])[:40]:
                   print(f"  {m['vulnerability']['id']} {m['vulnerability']['severity']} {m['artifact']['name']} {m['artifact']['version']}")
           PY
-          cp "$VCPKG_REPORT" grype-vcpkg.json
-          cp "$REPO_REPORT" grype-repo.json
+          [ -z "$VCPKG_REPORT" ] || cp "$VCPKG_REPORT" grype-vcpkg.json
+          [ -z "$REPO_REPORT" ] || cp "$REPO_REPORT" grype-repo.json
 
       - name: Keep the reports
+        if: always()
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: sbom-scan

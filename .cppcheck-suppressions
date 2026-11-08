@@ -1,0 +1,5 @@
+// Reviewed findings. Every other finding fails the pipeline.
+// Constructor arguments named like the member, member{ member } initialises the member from the argument.
+selfInitialization
+// callbacks[idx] = std::move(fnct) is an assignment, cppcheck reads the result as unused.
+ignoredReturnValue:Common/include/Network/Session.h

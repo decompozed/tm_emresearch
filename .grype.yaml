@@ -1,0 +1,13 @@
+# Reviewed false matches. The vcpkg SBOM has no package URLs, so Grype matches on the name alone.
+ignore:
+  # npm malware advisory for an npm package with the same name, this is the Boost library
+  - vulnerability: GHSA-9cwv-pvc3-fwhq
+    package:
+      name: boost-iterator
+  - vulnerability: GHSA-rw9q-wrqh-j48m
+    package:
+      name: boost-static-assert
+  # Advisory for the Ruby zlib gem, this is the zlib C library
+  - vulnerability: GHSA-g857-hhfv-j68w
+    package:
+      name: zlib
