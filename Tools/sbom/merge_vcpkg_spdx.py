@@ -30,15 +30,28 @@ def spdx_id(name):
     return 'SPDXRef-Package-' + re.sub(r'[^A-Za-z0-9.-]', '-', name)
 
 
-def read_status(path, triplet):
-    """Port name to direct dependencies, from vcpkg's own status database."""
+def read_status(database, triplet):
+    """Port name to direct dependencies, from vcpkg's own database: the status file plus the updates written after it.
+
+    On a fresh install the status file does not exist yet and everything is in updates/.
+    """
+    sources = [database / 'status'] if (database / 'status').exists() else []
+    sources += sorted((database / 'updates').glob('*')) if (database / 'updates').is_dir() else []
+    latest = {}
+    for source in sources:
+        for block in source.read_text(encoding='utf-8').split('\n\n'):
+            fields = dict(line.split(': ', 1) for line in block.splitlines() if ': ' in line)
+            if 'Package' in fields:
+                latest[(fields['Package'], fields.get('Feature', ''), fields.get('Architecture'))] = fields
+
     ports = {}
-    for block in path.read_text(encoding='utf-8').split('\n\n'):
-        fields = dict(line.split(': ', 1) for line in block.splitlines() if ': ' in line)
-        if fields.get('Architecture') != triplet or 'install ok installed' not in fields.get('Status', ''):
+    for (package, _, architecture), fields in latest.items():
+        if architecture != triplet or 'install ok installed' not in fields.get('Status', ''):
             continue
         depends = {d.strip().split(':')[0].split('[')[0] for d in fields.get('Depends', '').split(',') if d.strip()}
-        ports.setdefault(fields['Package'], set()).update(depends)
+        ports.setdefault(package, set()).update(depends)
+    if not ports:
+        raise SystemExit(f'no installed ports found for {triplet} in {database}')
     return ports
 
 
@@ -51,7 +64,7 @@ def direct_dependencies(manifest):
 
 
 def build(installed, triplet, manifest):
-    status = read_status(installed / 'vcpkg' / 'status', triplet)
+    status = read_status(installed / 'vcpkg', triplet)
     share = installed / triplet / 'share'
     packages, relationships, build_only = [], [], []
     project_id = spdx_id(PROJECT)
