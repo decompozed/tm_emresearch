@@ -85,6 +85,11 @@ namespace Main
             try { stmt->execute("CREATE INDEX IF NOT EXISTS idx_useritems_account_item ON UserItems(AccountID, ItemNumber)"); }catch (...) {}
 
             try { stmt->execute("ALTER TABLE Users ADD COLUMN IF NOT EXISTS CanUpdateNickname BOOLEAN NOT NULL DEFAULT 0"); } catch (...) {}
+
+            for (const char* statement : Common::Utils::Totp::schemaStatements)
+            {
+                stmt->execute(statement);
+            }
         }
 
         void PersistentDatabase::connectWithRetry()

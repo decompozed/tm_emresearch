@@ -61,5 +61,6 @@
 #include "../include/ChatCommands/Commands/TestCommand.h"
 #include "../include/ChatCommands/Commands/Title.h"
 #include "../include/ChatCommands/Commands/TransferClan.h"
+#include "../include/ChatCommands/Commands/TwoFa.h"
 #include "../include/ChatCommands/Commands/Unban.h"
 #include "../include/ChatCommands/Commands/UpdateClanIcons.h"

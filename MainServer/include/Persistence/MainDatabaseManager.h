@@ -37,6 +37,8 @@ namespace Main
 
 			std::recursive_mutex m_mutex;
 
+			void insertRecoveryCodes(std::uint32_t accountID, const std::vector<std::string>& hashes);
+
 			using Item = Main::Structures::Item;
 			using BoughtItem = Main::Structures::BoughtItem;
 			using EquippedItem = Main::Structures::EquippedItem;
@@ -89,6 +91,12 @@ namespace Main
 			bool isUserInClan(std::uint32_t accountID);
 			bool updatePasswordByAid(std::uint32_t accountID, const std::string& newHashedPassword);
 			bool updateSecretByAid(std::uint32_t accountID, const std::string& newEncryptedSecret);
+			bool consumeTotpStep(std::uint32_t accountID, std::uint64_t step);
+			bool enableTwoFactor(std::uint32_t accountID, const std::string& encryptedSecret, std::uint64_t confirmedStep, const std::vector<std::string>& recoveryHashes);
+			bool disableTwoFactor(std::uint32_t accountID);
+			bool replaceRecoveryCodes(std::uint32_t accountID, const std::vector<std::string>& recoveryHashes);
+			std::vector<std::pair<std::uint32_t, std::string>> getUnusedRecoveryCodes(std::uint32_t accountID);
+			bool consumeRecoveryCode(std::uint32_t codeId);
 			void logMessage(std::uint32_t accountID, const std::string& message);
 			void logOnlinePlayers(std::uint16_t serverId, std::uint32_t playerCount);
 			std::vector<std::pair<std::uint32_t, std::uint32_t>> getPlayerAchievements(std::uint32_t accountID);

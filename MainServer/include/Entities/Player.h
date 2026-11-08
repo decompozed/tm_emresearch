@@ -1,6 +1,7 @@
 #ifndef PLAYER_CLASS_H
 #define PLAYER_CLASS_H
 
+#include <ctime>
 #include "Structures/Item/MainEquippedItem.h"
 #include "Structures/Item/MainBoughtItem.h"
 #include "Structures/AccountInfo/MainAccountInfo.h"
@@ -52,6 +53,8 @@ namespace Main
 			std::uint32_t totalWrong2FaUsernameChange{};
 			std::uint32_t totalWrongUsernameChange{};
 			std::uint32_t totalWrong2FaReset{};
+			std::string pendingTwoFaSecret{}; // /twofa setup: kept only in memory until the first code confirms it
+			std::time_t pendingTwoFaSince{};
 			std::string hwid{ "" };
 			std::uint64_t hwidLastUpdatedTimestamp{};
 			std::string gradedHwid{ "" };
