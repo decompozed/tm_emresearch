@@ -74,9 +74,9 @@ namespace Main
 			{
 				const std::size_t maxPayloadSize = Common::Constants::maxPacketBytes - Common::Constants::headerSize;
 				const std::size_t numItemsPerPacket = maxPayloadSize / sizeof(T);
+				if (numItemsPerPacket == 0) return;
 				const std::size_t totalPackets = (data.size() + numItemsPerPacket - 1) / numItemsPerPacket;
 
-				if (numItemsPerPacket == 0) return;
 				for (std::size_t packetIndex = 0; packetIndex < totalPackets; ++packetIndex)
 				{
 					const std::size_t startIndex = packetIndex * numItemsPerPacket;
