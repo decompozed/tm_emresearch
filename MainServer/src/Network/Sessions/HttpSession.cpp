@@ -11,6 +11,7 @@
 
 #include "Network/Sessions/HttpSession.h"
 #include "Detail/CdbUtils.h"
+#include "Utils/JwtKeys.h"
 
 #include <charconv>
 #include <algorithm>
@@ -25,9 +26,8 @@ namespace Main
             try
             {
                 auto decoded_token = jwt::decode(token);
-                auto verifier = jwt::verify().allow_algorithm(jwt::algorithm::hs256{
-                    Common::Utils::SetupParser::getInstance().getWebsiteSetup().jwtToken});
-                verifier.verify(decoded_token);
+                const auto& website = Common::Utils::SetupParser::getInstance().getWebsiteSetup();
+                Common::Utils::JwtKeys::verifyHs256(decoded_token, website.jwtToken, website.jwtTokenPrevious);
                 auto grade_claim = decoded_token.get_payload_claim("role");
                 int grade = grade_claim.as_integer();
                 if (grade < requiredGrade)
