@@ -31,9 +31,15 @@ namespace Main
 			const uint8_t* originalData = request.getData();
 			const std::size_t dataSize = std::min(static_cast<std::size_t>(request.getOption()),
 			                                      static_cast<std::size_t>(request.getDataSize()));
-			std::string logMessage(originalData, originalData + dataSize);
-			scheduler.addRepetitiveCallback(std::source_location::current(), accountInfo.accountID,
-				&Main::Persistence::PersistentDatabase::logMessage, accountInfo.accountID, logMessage);
+			// A whisper is logged by handleWhisperMessage, which knows where the nickname ends: logged here its first bytes are the
+			// receiver's nickname, so the command redaction would not see a typed /changepw
+			const bool whisperLoggedElsewhere = request.getExtra() == Enums::ChatExtra::WHISPER && !session->getPlayer().moderationInfo.isMuted;
+			if (!whisperLoggedElsewhere)
+			{
+				std::string logMessage(originalData, originalData + dataSize);
+				scheduler.addRepetitiveCallback(std::source_location::current(), accountInfo.accountID,
+					&Main::Persistence::PersistentDatabase::logMessage, accountInfo.accountID, logMessage);
+			}
 
 			if (executeCommon(request, session, sessionsManager, chatCommands, roomsManager, scheduler, accountInfo, response, mainSv))
 			{

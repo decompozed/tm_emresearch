@@ -184,13 +184,23 @@ namespace Common
 				return result;
 			}
 
-			// Chat is written to the ChatLogs table before commands run, and this command carries passwords and codes
+			// Chat is written to the ChatLogs table before commands run. These commands carry passwords or codes (the
+			// password ones were removed from the server, but a player can still type them), so only the name is kept.
 			inline std::string redactCommandForLog(const std::string& message)
 			{
-				constexpr std::string_view command = "/twofa";
-				if (message.size() >= command.size() && toUpper(message.substr(0, command.size())) == "/TWOFA")
+				constexpr std::array<std::string_view, 3> secretCommands{ "/twofa", "/changepw", "/changeusername" };
+				const std::size_t start = message.find_first_not_of(" \t");
+				if (start == std::string::npos)
 				{
-					return "/twofa [redacted]";
+					return message;
+				}
+				const std::string head = toUpper(message.substr(start, 16));
+				for (const std::string_view command : secretCommands)
+				{
+					if (head.starts_with(toUpper(std::string{ command })))
+					{
+						return std::string{ command } + " [redacted]";
+					}
 				}
 				return message;
 			}

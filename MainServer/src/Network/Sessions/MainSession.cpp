@@ -28,6 +28,7 @@
 
 #include "Entities/Player.h"
 #include "Network/Sessions/MainSession.h"
+#include "Utils/SecurityEvent.h"
 #include <functional>
 #include <asio.hpp>
 #include <mutex>
@@ -70,6 +71,7 @@ namespace Main
 			Common::Network::Packet incomingPacket;
 			if (!incomingPacket.processIncomingPacket(data.data(), static_cast<std::uint16_t>(data.size()), m_crypt.UserKey))
 			{
+				Common::Utils::SecurityEvent::emit("packet_invalid", "MEDIUM", getAccountInfo().accountID, getIp(), "dropped", "undecodable_packet", corrId());
 				return;
 			}
 			const std::uint16_t callbackNum = incomingPacket.getOrder();

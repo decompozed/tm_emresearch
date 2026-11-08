@@ -9,6 +9,7 @@
 #include "Rooms/Room.h"
 #include <cstring> 
 #include <vector>
+#include "Utils/Totp.h"
 
 namespace Main
 {
@@ -38,7 +39,8 @@ namespace Main
 
 			std::size_t dataSize = request.getOption();
 			std::string prefix = "[Whisper To: " + std::string(receiverNickname) + "]: ";
-			std::string logMessage = prefix + std::string(message, message + dataSize);
+			// a whisper can carry a typed command with a password, the body goes through the same redaction as chat
+			std::string logMessage = prefix + Common::Utils::Totp::redactCommandForLog(std::string(message, message + dataSize));
 			scheduler.addRepetitiveCallback(std::source_location::current(), accountInfo.accountID,
 				&Main::Persistence::PersistentDatabase::logMessage, accountInfo.accountID, logMessage);
 

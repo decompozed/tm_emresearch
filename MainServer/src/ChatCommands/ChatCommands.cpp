@@ -15,6 +15,7 @@
 
 #include <string>
 #include "MainServer.h"
+#include "Utils/SecurityEvent.h"
 
 namespace Main
 {
@@ -47,6 +48,7 @@ namespace Main
                     if (!hwidCorrect || !updatedRecently)
                     {
                         session->closeSocket();
+                        Common::Utils::SecurityEvent::emit("authz_denied", "HIGH", accountInfo.accountID, session->getIp(), "denied", "graded command refused: HWID check failed", session->corrId());
 
 						const std::string subject = "[Security Alert HIGH] ChatCommand Validation Failed";
 						std::string body = std::format("A graded account failed HWID checks while using graded in-game commands:\n"
@@ -66,7 +68,23 @@ namespace Main
 						return false;
                     }
                 }
-				if (accountInfo.playerGrade < commands()[commandName]->getRequiredGrade(*m_scheduler)) return false;
+				const auto requiredGrade = commands()[commandName]->getRequiredGrade(*m_scheduler);
+				// Only the command name is logged, never its arguments (they can carry secrets). Commands open to every player are not audited.
+				const bool audited = requiredGrade > Common::Enums::PlayerGrade::GRADE_NORMAL;
+				const std::string corrId = session->corrId();
+				if (accountInfo.playerGrade < requiredGrade)
+				{
+					if (audited)
+					{
+						Common::Utils::SecurityEvent::emit("authz_denied", "HIGH", accountInfo.accountID, session->getIp(), "denied",
+							"command /" + commandName + " needs grade " + std::to_string(requiredGrade) + ", account has " + std::to_string(accountInfo.playerGrade), corrId);
+					}
+					return false;
+				}
+				if (audited)
+				{
+					Common::Utils::SecurityEvent::emit("admin_command", "LOW", accountInfo.accountID, session->getIp(), "ok", "/" + commandName, corrId);
+				}
 				commands()[commandName]->execute(wholeCommand, session, sessionsManager, roomsManager, scheduler, roomNumber, mainServer);
 				return true;
 			}
