@@ -30,12 +30,14 @@ source_group(TREE ${CMAKE_CURRENT_LIST_DIR} FILES ${TEST_SOURCES})
 source_group(TREE ${CMAKE_SOURCE_DIR}/MainServer/src PREFIX "MainServer" FILES ${PARTY_MODE_SOURCES})
 source_group(TREE ${CMAKE_SOURCE_DIR}/CastServer/src PREFIX "CastServer" FILES ${CAST_PARTY_SOURCES})
 
+find_path(JWT_CPP_INCLUDE_DIRS "jwt-cpp/base.h") # Utils/JwtKeys.h
 target_include_directories(Tests
     PRIVATE
         ${CMAKE_SOURCE_DIR}/Common/include
         ${CMAKE_SOURCE_DIR}/Common/include/Utils
         ${CMAKE_SOURCE_DIR}/MainServer/include
         ${CMAKE_SOURCE_DIR}/CastServer/include
+        ${JWT_CPP_INCLUDE_DIRS}
 )
 
 target_link_libraries(Tests PRIVATE GTest::gtest GTest::gtest_main cryptopp::cryptopp) # cryptopp: HaveApi/DllProof.h
