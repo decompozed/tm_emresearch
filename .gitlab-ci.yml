@@ -1,0 +1,66 @@
+stages:
+  - build
+  - loadtest
+
+variables:
+  DEBIAN_FRONTEND: noninteractive
+  VCPKG_ROOT: "$CI_PROJECT_DIR/.vcpkg"
+  VCPKG_DEFAULT_BINARY_CACHE: "$CI_PROJECT_DIR/.cache/vcpkg-bin"
+  VCPKG_DISABLE_METRICS: "1"
+  CC: gcc-14
+  CXX: g++-14
+
+build:
+  stage: build
+  image: ubuntu:24.04
+  timeout: 3h
+  cache:
+    key:
+      files:
+        - vcpkg.json
+    paths:
+      - .vcpkg/
+      - .cache/vcpkg-bin/
+  before_script:
+    - apt-get update -qq
+    - >
+      apt-get install -y -qq --no-install-recommends
+      build-essential gcc-14 g++-14 cmake ninja-build git curl zip unzip tar pkg-config python3
+      autoconf automake autoconf-archive libtool bison flex ca-certificates
+    - mkdir -p "$VCPKG_DEFAULT_BINARY_CACHE"
+    - |
+      if [ ! -x "$VCPKG_ROOT/bootstrap-vcpkg.sh" ]; then
+        rm -rf "$VCPKG_ROOT"
+        git clone https://github.com/microsoft/vcpkg.git "$VCPKG_ROOT"
+      else
+        git -C "$VCPKG_ROOT" fetch -q origin && git -C "$VCPKG_ROOT" reset -q --hard origin/master
+      fi
+    - "$VCPKG_ROOT/bootstrap-vcpkg.sh -disableMetrics"
+  script:
+    - cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
+    - cmake --build build -- -k 0
+    - ctest --test-dir build --output-on-failure
+  artifacts:
+    expire_in: 1 week
+    paths:
+      - AuthServer.elf
+      - MainServer.elf
+      - CastServer.elf
+      - Output/CastLoadTest.elf
+
+cast-loadtest:
+  stage: loadtest
+  image: ubuntu:24.04
+  needs: [build]
+  timeout: 30m
+  before_script:
+    - apt-get update -qq && apt-get install -y -qq --no-install-recommends iproute2
+  script:
+    - chmod +x CastServer.elf Output/CastLoadTest.elf Tools/CastLoadTest/run.sh
+    - Tools/CastLoadTest/run.sh CastServer.elf Output/CastLoadTest.elf loadtest-report.txt
+  artifacts:
+    when: always
+    expire_in: 1 month
+    paths:
+      - loadtest-report.txt
+      - cast-*.log

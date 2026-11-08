@@ -1,0 +1,44 @@
+#ifndef ROOMS_LIST_HANDLER_H
+#define ROOMS_LIST_HANDLER_H
+
+#include "Network/Sessions/MainSession.h"
+#include "Network/Packet.h"
+#include "MainEnums.h"
+#include "Managers/RoomsManager.h"
+#include "HaveApi/RoomMessages.h"
+#include <memory>
+#include <cstring> 
+
+namespace Main
+{
+	namespace Handlers
+	{
+		inline void handleRoomsList(const Common::Network::Packet& request, std::shared_ptr<Main::Network::Session> session, Main::Classes::RoomsManager& roomsManager)
+		{
+			auto roomsList = roomsManager.getRoomsList();
+
+			if (session->getAccountInfo().playerGrade >= Common::Enums::GRADE_MOD)
+			{
+				auto clanRoomsList = roomsManager.getClanRoomsList();
+				//roomsList.insert(roomsList.end(), clanRoomsList.begin(), clanRoomsList.end());
+				// currently disabled to avoid issues
+			}
+
+			auto size = roomsList.size();
+			std::vector<std::uint8_t> message(roomsList.size() * sizeof(Main::Structures::SingleRoom) + sizeof(std::uint32_t));
+			std::memcpy(message.data(), &size, sizeof(std::uint16_t));
+			std::memcpy(message.data() + sizeof(std::uint16_t), &size, sizeof(std::uint16_t));
+			std::memcpy(message.data() + sizeof(std::uint32_t), roomsList.data(), roomsList.size() * sizeof(Main::Structures::SingleRoom));
+
+			Main::HaveApi::sendPartyRoomTable(*session, roomsManager, roomsList); // have_api: party game of each party room
+
+			Common::Network::Packet response;
+			response.setTcpHeader(request.getSession(), Common::Enums::NO_ENCRYPTION);
+			response.setCommand(request.getOrder(), 0, 37, 0);
+			response.setData(message.data(), message.size());
+			session->asyncWrite(response);
+		}
+	}	
+}
+
+#endif

@@ -1,0 +1,2004 @@
+{
+ "id": 58,
+ "end_cam": 10,
+ "maps": [
+  {
+   "id": 10,
+   "offset": [
+    -5242,
+    7145,
+    0
+   ],
+   "tdm_team": "REDTEAM",
+   "drop_spawns": [
+    "FFA/02"
+   ]
+  },
+  {
+   "id": 22,
+   "offset": [
+    6592,
+    6693,
+    0
+   ],
+   "tdm_team": "BLUETEAM",
+   "drop_spawns": [
+    "FFA/11"
+   ]
+  },
+  {
+   "id": 26,
+   "offset": [
+    -446,
+    -6162,
+    800
+   ],
+   "tdm_team": "REDTEAM",
+   "drop_spawns": [
+    "TDM/BLUETEAM/01",
+    "FFA/01"
+   ],
+   "crop": [
+    [
+     -4484,
+     -6248,
+     -1949
+    ],
+    [
+     4416,
+     6152,
+     4040
+    ]
+   ]
+  },
+  {
+   "id": 39,
+   "offset": [
+    10300,
+    -713,
+    -50
+   ],
+   "tdm_team": "BLUETEAM",
+   "drop_spawns": [
+    "FFA/08"
+   ],
+   "crop": [
+    [
+     -4546,
+     -4737,
+     -1474
+    ],
+    [
+     4754,
+     4763,
+     8828
+    ]
+   ],
+   "actor_renames": {
+    "Jumper01": "Jumper11",
+    "Jumper02": "Jumper12",
+    "Jumper03": "Jumper13"
+   }
+  }
+ ],
+ "corridors": [
+  {
+   "name": "c10_22",
+   "axis": "x",
+   "across": [
+    6528,
+    7081
+   ],
+   "profile": [
+    [
+     -2982,
+     657,
+     1480
+    ],
+    [
+     -2500,
+     657,
+     1480
+    ],
+    [
+     -700,
+     115,
+     925
+    ],
+    [
+     -56,
+     115,
+     925
+    ]
+   ],
+   "render": {
+    "floor": [
+     -2982,
+     -80
+    ],
+    "walls": [
+     [
+      -2976,
+      5
+     ],
+     [
+      -2976,
+      78
+     ]
+    ],
+    "ceiling": [
+     -2976,
+     -60
+    ],
+    "ceiling_end": [
+     [
+      5,
+      6528
+     ],
+     [
+      -41,
+      6639
+     ],
+     [
+      -56,
+      6757
+     ],
+     [
+      -41,
+      6876
+     ],
+     [
+      5,
+      6986
+     ],
+     [
+      78,
+      7081
+     ]
+    ],
+    "shell": {
+     "thickness": 30,
+     "range": [
+      -2976,
+      -60
+     ]
+    }
+   },
+   "colp": {
+    "floor": [
+     -2995,
+     -56
+    ],
+    "walls": [
+     [
+      -2998,
+      57
+     ],
+     [
+      -2998,
+      130
+     ]
+    ],
+    "ceiling": [
+     -2998,
+     -30
+    ],
+    "ceiling_end": [
+     [
+      57,
+      6528
+     ],
+     [
+      8,
+      6584
+     ],
+     [
+      -23,
+      6817
+     ],
+     [
+      67,
+      7034
+     ],
+     [
+      130,
+      7081
+     ]
+    ],
+    "margin": 20
+   },
+   "colb": {
+    "floor": [
+     -2995,
+     -56
+    ],
+    "walls": [
+     [
+      -2998,
+      5
+     ],
+     [
+      -2998,
+      78
+     ]
+    ],
+    "ceiling": [
+     -2998,
+     -60
+    ],
+    "ceiling_end": [
+     [
+      5,
+      6528
+     ],
+     [
+      -41,
+      6639
+     ],
+     [
+      -56,
+      6757
+     ],
+     [
+      -41,
+      6876
+     ],
+     [
+      5,
+      6986
+     ],
+     [
+      78,
+      7081
+     ]
+    ],
+    "margin": 20
+   },
+   "caps": [
+    {
+     "at": -2976,
+     "facing": 1,
+     "top": 1480,
+     "colb": true,
+     "hole": [
+      [
+       6678,
+       657
+      ],
+      [
+       6678,
+       1150
+      ],
+      [
+       6687,
+       1221
+      ],
+      [
+       6712,
+       1290
+      ],
+      [
+       6750,
+       1352
+      ],
+      [
+       6813,
+       1417
+      ],
+      [
+       6871,
+       1456
+      ],
+      [
+       6929,
+       1417
+      ],
+      [
+       6991,
+       1352
+      ],
+      [
+       7030,
+       1290
+      ],
+      [
+       7055,
+       1221
+      ],
+      [
+       7064,
+       1150
+      ],
+      [
+       7064,
+       657
+      ]
+     ]
+    }
+   ],
+   "rooms": [
+    {
+     "name": "K1_NDLRM",
+     "box": [
+      [
+       -2978,
+       6528,
+       350
+      ],
+      [
+       -1600,
+       7081,
+       1500
+      ]
+     ],
+     "effects_from": "C1_NDLRM"
+    },
+    {
+     "name": "K2_NDLRM",
+     "box": [
+      [
+       -1600,
+       6528,
+       100
+      ],
+      [
+       -103.5,
+       7081,
+       1250
+      ]
+     ],
+     "effects_from": "RC_NDLRM"
+    }
+   ],
+   "room_walls": [
+    {
+     "room": "C1_NDLRM",
+     "normal": [
+      -1,
+      0,
+      0
+     ],
+     "world": 2978
+    }
+   ],
+   "portals": [
+    {
+     "between": [
+      "C1_NDLRM",
+      "K1_NDLRM"
+     ],
+     "polygon": [
+      [
+       -2978,
+       6678,
+       657
+      ],
+      [
+       -2978,
+       7064,
+       657
+      ],
+      [
+       -2978,
+       7064,
+       1456
+      ],
+      [
+       -2978,
+       6678,
+       1456
+      ]
+     ]
+    },
+    {
+     "between": [
+      "K1_NDLRM",
+      "K2_NDLRM"
+     ],
+     "polygon": [
+      [
+       -1600,
+       6528,
+       386
+      ],
+      [
+       -1600,
+       7081,
+       386
+      ],
+      [
+       -1600,
+       7081,
+       1203
+      ],
+      [
+       -1600,
+       6528,
+       1203
+      ]
+     ]
+    },
+    {
+     "between": [
+      "K2_NDLRM",
+      "RC_NDLRM"
+     ],
+     "polygon": [
+      [
+       -103.5,
+       6528,
+       115
+      ],
+      [
+       -103.5,
+       7081,
+       115
+      ],
+      [
+       -103.5,
+       7081,
+       925
+      ],
+      [
+       -103.5,
+       6528,
+       925
+      ]
+     ]
+    }
+   ],
+   "walk": {
+    "from": -3300,
+    "to": 250,
+    "lanes": [
+     0,
+     -90,
+     90
+    ],
+    "inside": [
+     -2990,
+     0
+    ]
+   },
+   "materials": [
+    {
+     "until": -1600,
+     "wall": {
+      "texture": "swall04.dds",
+      "near": [
+       -3007,
+       7100,
+       1000
+      ]
+     },
+     "floor": {
+      "texture": "sbottom02.dds",
+      "near": [
+       -3100,
+       6870,
+       657
+      ]
+     },
+     "ceiling": {
+      "texture": "pwall18.dds",
+      "near": [
+       -3200,
+       6870,
+       1620
+      ]
+     }
+    },
+    {
+     "until": null,
+     "room": "K2_NDLRM",
+     "wall": {
+      "texture": "REDC2.dds",
+      "near": [
+       -41,
+       6876,
+       100
+      ]
+     },
+     "floor": {
+      "texture": "P_conc8.dds",
+      "near": [
+       0,
+       6757,
+       115
+      ]
+     },
+     "ceiling": {
+      "texture": "REDC_INSIDE2.dds",
+      "near": [
+       100,
+       6757,
+       1120
+      ]
+     }
+    }
+   ],
+   "cuts": [
+    {
+     "label": "castle arch",
+     "file": "World.nif",
+     "mode": "remove",
+     "map": "m010",
+     "vertical": true,
+     "box": [
+      [
+       -2981,
+       6610,
+       650
+      ],
+      [
+       -2975,
+       7130,
+       1460
+      ]
+     ],
+     "expect": 7
+    },
+    {
+     "label": "paper apse",
+     "file": "World.nif",
+     "mode": "remove",
+     "map": "RC_NDLRM",
+     "vertical": true,
+     "box": [
+      [
+       -60,
+       6527,
+       -1
+      ],
+      [
+       80,
+       7082,
+       926
+      ]
+     ],
+     "expect": 20
+    },
+    {
+     "label": "castle arch",
+     "file": "World_colp.nif",
+     "mode": "clip",
+     "names": [
+      "coc_sand"
+     ],
+     "vertical": true,
+     "box": [
+      [
+       -3003,
+       6690,
+       660
+      ],
+      [
+       -2993,
+       7055,
+       1250
+      ]
+     ]
+    },
+    {
+     "label": "paper apse",
+     "file": "World_colp.nif",
+     "mode": "clip",
+     "names": [
+      "coc_sand"
+     ],
+     "vertical": true,
+     "box": [
+      [
+       -30,
+       6528,
+       -10
+      ],
+      [
+       140,
+       7081,
+       925
+      ]
+     ]
+    },
+    {
+     "label": "castle arch",
+     "file": "World_colb.nif",
+     "mode": "remove",
+     "names": [
+      "cob_sand"
+     ],
+     "vertical": true,
+     "box": [
+      [
+       -2981,
+       6660,
+       650
+      ],
+      [
+       -2975,
+       7090,
+       1500
+      ]
+     ],
+     "expect": 3
+    },
+    {
+     "label": "paper apse",
+     "file": "World_colb.nif",
+     "mode": "clip",
+     "names": [
+      "cob_sand"
+     ],
+     "vertical": true,
+     "box": [
+      [
+       -60,
+       6528,
+       -10
+      ],
+      [
+       95,
+       7081,
+       925
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "name": "c10_26",
+   "axis": "y",
+   "across": [
+    -4040,
+    -3680
+   ],
+   "profile": [
+    [
+     -990,
+     623.6,
+     1357
+    ],
+    [
+     -600,
+     623.6,
+     1357
+    ],
+    [
+     2600,
+     656.6,
+     1357
+    ],
+    [
+     3215,
+     656.6,
+     1357
+    ]
+   ],
+   "render": {
+    "floor": [
+     -1050,
+     2903
+    ],
+    "walls": [
+     [
+      -995,
+      3215
+     ],
+     [
+      -995,
+      3215
+     ]
+    ],
+    "ceiling": [
+     -995,
+     3215
+    ],
+    "shell": {
+     "thickness": 30,
+     "range": [
+      -940,
+      3200
+     ]
+    }
+   },
+   "colp": {
+    "floor": [
+     -1060,
+     3190
+    ],
+    "walls": [
+     [
+      -1000,
+      3190
+     ],
+     [
+      -1000,
+      3190
+     ]
+    ],
+    "ceiling": [
+     -1000,
+     3190
+    ],
+    "margin": 20
+   },
+   "colb": {
+    "floor": [
+     -1000,
+     2950
+    ],
+    "walls": [
+     [
+      -1000,
+      3215
+     ],
+     [
+      -1000,
+      3215
+     ]
+    ],
+    "ceiling": [
+     -1000,
+     3215
+    ],
+    "margin": 20
+   },
+   "caps": [
+    {
+     "at": 3215,
+     "facing": -1,
+     "top": 1357,
+     "colb": true,
+     "hole": [
+      [
+       -4016,
+       656.6
+      ],
+      [
+       -4016,
+       1060
+      ],
+      [
+       -4004,
+       1137
+      ],
+      [
+       -3978,
+       1201
+      ],
+      [
+       -3942,
+       1254
+      ],
+      [
+       -3899,
+       1294
+      ],
+      [
+       -3854,
+       1323
+      ],
+      [
+       -3808,
+       1294
+      ],
+      [
+       -3765,
+       1254
+      ],
+      [
+       -3729,
+       1201
+      ],
+      [
+       -3703,
+       1137
+      ],
+      [
+       -3698,
+       1060
+      ],
+      [
+       -3698,
+       656.6
+      ]
+     ]
+    }
+   ],
+   "rooms": [
+    {
+     "name": "K4_NDLRM",
+     "box": [
+      [
+       -4040,
+       -928,
+       273.6
+      ],
+      [
+       -3680,
+       1301.5,
+       1387
+      ]
+     ],
+     "effects_from": "m026_B3_NDLRM"
+    },
+    {
+     "name": "K3_NDLRM",
+     "box": [
+      [
+       -4040,
+       1301.5,
+       273.6
+      ],
+      [
+       -3680,
+       3532.9,
+       1387
+      ]
+     ],
+     "effects_from": "R9_NDLRM"
+    }
+   ],
+   "portals": [
+    {
+     "between": [
+      "m026_B3_NDLRM",
+      "K4_NDLRM"
+     ],
+     "polygon": [
+      [
+       -4040,
+       -928,
+       623.6
+      ],
+      [
+       -3680,
+       -928,
+       623.6
+      ],
+      [
+       -3680,
+       -928,
+       1357.0
+      ],
+      [
+       -4040,
+       -928,
+       1357.0
+      ]
+     ]
+    },
+    {
+     "between": [
+      "K4_NDLRM",
+      "K3_NDLRM"
+     ],
+     "polygon": [
+      [
+       -4040,
+       1301.5,
+       643.2
+      ],
+      [
+       -3680,
+       1301.5,
+       643.2
+      ],
+      [
+       -3680,
+       1301.5,
+       1357.0
+      ],
+      [
+       -4040,
+       1301.5,
+       1357.0
+      ]
+     ]
+    },
+    {
+     "between": [
+      "K3_NDLRM",
+      "R9_NDLRM"
+     ],
+     "polygon": [
+      [
+       -4040,
+       3532.9,
+       656.6
+      ],
+      [
+       -3680,
+       3532.9,
+       656.6
+      ],
+      [
+       -3680,
+       3532.9,
+       1357.0
+      ],
+      [
+       -4040,
+       3532.9,
+       1357.0
+      ]
+     ]
+    }
+   ],
+   "walk": {
+    "from": -1300,
+    "to": 3900,
+    "lanes": [
+     0,
+     -100,
+     100
+    ],
+    "inside": [
+     -900,
+     3150
+    ],
+    "head_room": 540
+   },
+   "materials": [
+    {
+     "wall": {
+      "texture": "metalwall27-3.dds",
+      "near": [
+       -4090,
+       -1300,
+       900
+      ]
+     },
+     "floor": {
+      "texture": "metalwall27-3.dds",
+      "near": [
+       -4090,
+       -1300,
+       624
+      ]
+     },
+     "ceiling": {
+      "texture": "metalwall27-3.dds",
+      "near": [
+       -4090,
+       -1300,
+       1372
+      ]
+     },
+     "until": 1301.5,
+     "outside_rooms": true
+    },
+    {
+     "wall": {
+      "texture": "swall04.dds",
+      "near": [
+       -3007,
+       7100,
+       1000
+      ]
+     },
+     "floor": {
+      "texture": "sbottom02.dds",
+      "near": [
+       -3100,
+       6870,
+       657
+      ]
+     },
+     "ceiling": {
+      "texture": "pwall18.dds",
+      "near": [
+       -3200,
+       6870,
+       1620
+      ]
+     },
+     "until": null,
+     "outside_rooms": true
+    }
+   ],
+   "cuts": [
+    {
+     "label": "pvc north wall",
+     "file": "World.nif",
+     "mode": "clip",
+     "box": [
+      [
+       -4040,
+       -995,
+       617.6
+      ],
+      [
+       -3680,
+       -935,
+       1357.0
+      ]
+     ]
+    },
+    {
+     "label": "pvc north wall",
+     "file": "World_colp.nif",
+     "mode": "clip",
+     "vertical": true,
+     "names": [
+      "coc_metal"
+     ],
+     "box": [
+      [
+       -4040,
+       -995,
+       617.6
+      ],
+      [
+       -3680,
+       -935,
+       1357.0
+      ]
+     ]
+    },
+    {
+     "label": "pvc north wall",
+     "file": "World_colb.nif",
+     "mode": "clip",
+     "vertical": true,
+     "names": [
+      "cob_metal"
+     ],
+     "box": [
+      [
+       -4040,
+       -995,
+       617.6
+      ],
+      [
+       -3680,
+       -935,
+       1357.0
+      ]
+     ]
+    },
+    {
+     "label": "castle tape",
+     "file": "World.nif",
+     "mode": "clip",
+     "vertical": true,
+     "box": [
+      [
+       -4005,
+       3590,
+       760
+      ],
+      [
+       -3705,
+       3606,
+       950
+      ]
+     ]
+    },
+    {
+     "label": "castle tape",
+     "file": "World_colp.nif",
+     "mode": "clip",
+     "vertical": true,
+     "names": [
+      "coc_sand"
+     ],
+     "box": [
+      [
+       -4005,
+       3590,
+       760
+      ],
+      [
+       -3705,
+       3606,
+       1055
+      ]
+     ]
+    },
+    {
+     "label": "castle fence",
+     "file": "World_colp.nif",
+     "mode": "clip",
+     "vertical": true,
+     "names": [
+      "Fence"
+     ],
+     "box": [
+      [
+       -4005,
+       3590,
+       600
+      ],
+      [
+       -3705,
+       3610,
+       1330
+      ]
+     ]
+    },
+    {
+     "label": "pvc wall cove",
+     "file": "World.nif",
+     "mode": "clip",
+     "box": [
+      [
+       -4040,
+       -1060,
+       626
+      ],
+      [
+       -3680,
+       -995,
+       1357
+      ]
+     ]
+    },
+    {
+     "label": "pvc wall cove",
+     "file": "World_colp.nif",
+     "mode": "clip",
+     "names": [
+      "coc_metal"
+     ],
+     "box": [
+      [
+       -4040,
+       -1060,
+       626
+      ],
+      [
+       -3680,
+       -935,
+       1357
+      ]
+     ]
+    },
+    {
+     "label": "pvc wall cove",
+     "file": "World_colb.nif",
+     "mode": "clip",
+     "names": [
+      "cob_metal"
+     ],
+     "box": [
+      [
+       -4040,
+       -1060,
+       626
+      ],
+      [
+       -3680,
+       -935,
+       1357
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "name": "c26_39",
+   "axis": "x",
+   "across": [
+    -1047,
+    -723
+   ],
+   "profile": [
+    [
+     -605,
+     622.5,
+     1322.5
+    ],
+    [
+     -200,
+     622.5,
+     1322.5
+    ],
+    [
+     5800,
+     523.8,
+     1223.8
+    ],
+    [
+     6220,
+     523.8,
+     1223.8
+    ]
+   ],
+   "render": {
+    "floor": [
+     -610,
+     6225
+    ],
+    "walls": [
+     [
+      -610,
+      6225
+     ],
+     [
+      -610,
+      6225
+     ]
+    ],
+    "ceiling": [
+     -610,
+     6225
+    ],
+    "shell": {
+     "thickness": 30,
+     "range": [
+      -560,
+      6190
+     ]
+    }
+   },
+   "colp": {
+    "floor": [
+     -615,
+     6230
+    ],
+    "walls": [
+     [
+      -615,
+      6230
+     ],
+     [
+      -615,
+      6230
+     ]
+    ],
+    "ceiling": [
+     -615,
+     6230
+    ],
+    "margin": 20
+   },
+   "colb": {
+    "floor": [
+     -615,
+     6230
+    ],
+    "walls": [
+     [
+      -615,
+      6230
+     ],
+     [
+      -615,
+      6230
+     ]
+    ],
+    "ceiling": [
+     -615,
+     6230
+    ],
+    "margin": 20
+   },
+   "caps": [],
+   "rooms": [
+    {
+     "name": "K5_NDLRM",
+     "box": [
+      [
+       -538.2,
+       -1047,
+       173.79999999999995
+      ],
+      [
+       2801.5,
+       -723,
+       1352.5
+      ]
+     ],
+     "effects_from": "m026_B1_NDLRM"
+    },
+    {
+     "name": "K6_NDLRM",
+     "box": [
+      [
+       2801.5,
+       -1047,
+       173.79999999999995
+      ],
+      [
+       6195.5,
+       -723,
+       1352.5
+      ]
+     ],
+     "effects_from": "I10_NDLRM"
+    }
+   ],
+   "portals": [
+    {
+     "between": [
+      "m026_B1_NDLRM",
+      "K5_NDLRM"
+     ],
+     "polygon": [
+      [
+       -538.2,
+       -1047,
+       622.5
+      ],
+      [
+       -538.2,
+       -723,
+       622.5
+      ],
+      [
+       -538.2,
+       -723,
+       1322.5
+      ],
+      [
+       -538.2,
+       -1047,
+       1322.5
+      ]
+     ]
+    },
+    {
+     "between": [
+      "K5_NDLRM",
+      "K6_NDLRM"
+     ],
+     "polygon": [
+      [
+       2801.5,
+       -1047,
+       573.1
+      ],
+      [
+       2801.5,
+       -723,
+       573.1
+      ],
+      [
+       2801.5,
+       -723,
+       1273.1
+      ],
+      [
+       2801.5,
+       -1047,
+       1273.1
+      ]
+     ]
+    },
+    {
+     "between": [
+      "K6_NDLRM",
+      "I10_NDLRM"
+     ],
+     "polygon": [
+      [
+       6195.5,
+       -1047,
+       523.8
+      ],
+      [
+       6195.5,
+       -723,
+       523.8
+      ],
+      [
+       6195.5,
+       -723,
+       1223.8
+      ],
+      [
+       6195.5,
+       -1047,
+       1223.8
+      ]
+     ]
+    }
+   ],
+   "walk": {
+    "from": -1000,
+    "to": 6420,
+    "lanes": [
+     0,
+     -100,
+     100
+    ],
+    "inside": [
+     -500,
+     6150
+    ]
+   },
+   "materials": [
+    {
+     "wall": {
+      "texture": "metalwall27-3.dds",
+      "near": [
+       -900,
+       -885,
+       900
+      ]
+     },
+     "floor": {
+      "texture": "metalfloor4.dds",
+      "near": [
+       -900,
+       -885,
+       623
+      ]
+     },
+     "ceiling": {
+      "texture": "metalwall27-3.dds",
+      "near": [
+       -900,
+       -885,
+       1480
+      ]
+     },
+     "until": 2801.5,
+     "outside_rooms": true
+    },
+    {
+     "wall": {
+      "texture": "walll.dds",
+      "near": [
+       6400,
+       -885,
+       800
+      ]
+     },
+     "floor": {
+      "texture": "bottom10.dds",
+      "near": [
+       6400,
+       -885,
+       524
+      ]
+     },
+     "ceiling": {
+      "texture": "ceiling01.dds",
+      "near": [
+       6400,
+       -885,
+       1417
+      ]
+     },
+     "until": null,
+     "outside_rooms": true
+    }
+   ],
+   "cuts": [
+    {
+     "label": "pvc tower east wall",
+     "file": "World.nif",
+     "mode": "clip",
+     "box": [
+      [
+       -610,
+       -1047,
+       616.5
+      ],
+      [
+       -560,
+       -723,
+       1322.5
+      ]
+     ]
+    },
+    {
+     "label": "pvc tower east wall",
+     "file": "World_colp.nif",
+     "mode": "clip",
+     "vertical": true,
+     "names": [
+      "coc_metal"
+     ],
+     "box": [
+      [
+       -610,
+       -1047,
+       616.5
+      ],
+      [
+       -560,
+       -723,
+       1322.5
+      ]
+     ]
+    },
+    {
+     "label": "pvc tower east wall",
+     "file": "World_colb.nif",
+     "mode": "clip",
+     "vertical": true,
+     "names": [
+      "cob_metal"
+     ],
+     "box": [
+      [
+       -610,
+       -1047,
+       616.5
+      ],
+      [
+       -560,
+       -723,
+       1322.5
+      ]
+     ]
+    },
+    {
+     "label": "studio west wall",
+     "file": "World.nif",
+     "mode": "clip",
+     "box": [
+      [
+       6185,
+       -1047,
+       517.8
+      ],
+      [
+       6225,
+       -723,
+       1223.8
+      ]
+     ]
+    },
+    {
+     "label": "studio west wall",
+     "file": "World_colp.nif",
+     "mode": "clip",
+     "vertical": true,
+     "names": [
+      "coc_conc"
+     ],
+     "box": [
+      [
+       6185,
+       -1047,
+       517.8
+      ],
+      [
+       6225,
+       -723,
+       1223.8
+      ]
+     ]
+    },
+    {
+     "label": "studio west wall",
+     "file": "World_colb.nif",
+     "mode": "clip",
+     "vertical": true,
+     "names": [
+      "cob_conc",
+      "cob_wood"
+     ],
+     "box": [
+      [
+       6185,
+       -1047,
+       517.8
+      ],
+      [
+       6225,
+       -723,
+       1223.8
+      ]
+     ]
+    }
+   ]
+  },
+  {
+   "name": "c39_22",
+   "axis": "y",
+   "across": [
+    6338,
+    6662
+   ],
+   "profile": [
+    [
+     -305,
+     523.8,
+     1223.8
+    ],
+    [
+     100,
+     523.8,
+     1223.8
+    ],
+    [
+     4700,
+     436.8,
+     1136.8
+    ],
+    [
+     5120,
+     436.8,
+     1136.8
+    ]
+   ],
+   "render": {
+    "floor": [
+     -310,
+     5125
+    ],
+    "walls": [
+     [
+      -310,
+      5125
+     ],
+     [
+      -310,
+      5125
+     ]
+    ],
+    "ceiling": [
+     -310,
+     5125
+    ],
+    "shell": {
+     "thickness": 30,
+     "range": [
+      -290,
+      5010
+     ]
+    }
+   },
+   "colp": {
+    "floor": [
+     -315,
+     5130
+    ],
+    "walls": [
+     [
+      -315,
+      5130
+     ],
+     [
+      -315,
+      5130
+     ]
+    ],
+    "ceiling": [
+     -315,
+     5130
+    ],
+    "margin": 20
+   },
+   "colb": {
+    "floor": [
+     -315,
+     5130
+    ],
+    "walls": [
+     [
+      -315,
+      5130
+     ],
+     [
+      -315,
+      5130
+     ]
+    ],
+    "ceiling": [
+     -315,
+     5130
+    ],
+    "margin": 20
+   },
+   "caps": [],
+   "rooms": [
+    {
+     "name": "K7_NDLRM",
+     "box": [
+      [
+       6338,
+       -293,
+       86.80000000000001
+      ],
+      [
+       6662,
+       2401.5,
+       1253.8
+      ]
+     ],
+     "effects_from": "I11_NDLRM"
+    },
+    {
+     "name": "K8_NDLRM",
+     "box": [
+      [
+       6338,
+       2401.5,
+       86.80000000000001
+      ],
+      [
+       6662,
+       5093,
+       1253.8
+      ]
+     ],
+     "effects_from": "TOP2_NDLRM"
+    }
+   ],
+   "portals": [
+    {
+     "between": [
+      "I11_NDLRM",
+      "K7_NDLRM"
+     ],
+     "polygon": [
+      [
+       6338,
+       -293,
+       523.8
+      ],
+      [
+       6662,
+       -293,
+       523.8
+      ],
+      [
+       6662,
+       -293,
+       1223.8
+      ],
+      [
+       6338,
+       -293,
+       1223.8
+      ]
+     ]
+    },
+    {
+     "between": [
+      "K7_NDLRM",
+      "K8_NDLRM"
+     ],
+     "polygon": [
+      [
+       6338,
+       2401.5,
+       480.3
+      ],
+      [
+       6662,
+       2401.5,
+       480.3
+      ],
+      [
+       6662,
+       2401.5,
+       1180.3
+      ],
+      [
+       6338,
+       2401.5,
+       1180.3
+      ]
+     ]
+    },
+    {
+     "between": [
+      "K8_NDLRM",
+      "TOP2_NDLRM"
+     ],
+     "polygon": [
+      [
+       6338,
+       5093,
+       436.8
+      ],
+      [
+       6662,
+       5093,
+       436.8
+      ],
+      [
+       6662,
+       5093,
+       1136.8
+      ],
+      [
+       6338,
+       5093,
+       1136.8
+      ]
+     ]
+    }
+   ],
+   "walk": {
+    "from": -700,
+    "to": 5500,
+    "lanes": [
+     0,
+     -100,
+     100
+    ],
+    "inside": [
+     -250,
+     5050
+    ]
+   },
+   "materials": [
+    {
+     "wall": {
+      "texture": "walll.dds",
+      "near": [
+       6500,
+       -500,
+       800
+      ]
+     },
+     "floor": {
+      "texture": "bottom10.dds",
+      "near": [
+       6500,
+       -500,
+       524
+      ]
+     },
+     "ceiling": {
+      "texture": "ceiling01.dds",
+      "near": [
+       6500,
+       -500,
+       1417
+      ]
+     },
+     "until": 2401.5,
+     "outside_rooms": true
+    },
+    {
+     "wall": {
+      "texture": "REDC2.dds",
+      "near": [
+       6500,
+       5300,
+       700
+      ]
+     },
+     "floor": {
+      "texture": "P_conc8.dds",
+      "near": [
+       6500,
+       5300,
+       437
+      ]
+     },
+     "ceiling": {
+      "texture": "REDC_INSIDE2.dds",
+      "near": [
+       6500,
+       5300,
+       1100
+      ]
+     },
+     "outside_rooms": true,
+     "until": null
+    }
+   ],
+   "cuts": [
+    {
+     "label": "studio north wall",
+     "file": "World.nif",
+     "mode": "clip",
+     "box": [
+      [
+       6338,
+       -310,
+       517.8
+      ],
+      [
+       6662,
+       -285,
+       1223.8
+      ]
+     ]
+    },
+    {
+     "label": "studio north wall",
+     "file": "World_colp.nif",
+     "mode": "clip",
+     "vertical": true,
+     "names": [
+      "coc_conc"
+     ],
+     "box": [
+      [
+       6338,
+       -310,
+       517.8
+      ],
+      [
+       6662,
+       -285,
+       1223.8
+      ]
+     ]
+    },
+    {
+     "label": "studio north wall",
+     "file": "World_colb.nif",
+     "mode": "clip",
+     "vertical": true,
+     "names": [
+      "cob_conc",
+      "cob_wood"
+     ],
+     "box": [
+      [
+       6338,
+       -310,
+       517.8
+      ],
+      [
+       6662,
+       -285,
+       1223.8
+      ]
+     ]
+    },
+    {
+     "label": "paper south facade",
+     "file": "World.nif",
+     "mode": "clip",
+     "box": [
+      [
+       6338,
+       5005,
+       430.8
+      ],
+      [
+       6662,
+       5125,
+       1136.8
+      ]
+     ]
+    },
+    {
+     "label": "paper south facade",
+     "file": "World_colp.nif",
+     "mode": "clip",
+     "vertical": true,
+     "names": [
+      "coc_sand"
+     ],
+     "box": [
+      [
+       6338,
+       5005,
+       430.8
+      ],
+      [
+       6662,
+       5125,
+       1136.8
+      ]
+     ]
+    },
+    {
+     "label": "paper south facade",
+     "file": "World_colb.nif",
+     "mode": "clip",
+     "vertical": true,
+     "names": [
+      "cob_sand"
+     ],
+     "box": [
+      [
+       6338,
+       5005,
+       430.8
+      ],
+      [
+       6662,
+       5125,
+       1136.8
+      ]
+     ]
+    }
+   ]
+  }
+ ]
+}

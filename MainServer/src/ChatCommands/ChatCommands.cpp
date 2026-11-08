@@ -1,0 +1,86 @@
+/*
+ * ToyBattlesHQ Emulator
+ * Copyright (C) 2026 DownWithTheFallen
+ *
+ * This software is licensed under the ToyBattlesHQ Custom License (TBCL v1.0).
+ * See LICENSE file in the project root for full terms.
+ *
+ * https://github.com/DownWithTheFallen/ToyBattlesHQ
+ */
+
+
+#include "ChatCommands/ICommand.h"
+#include "ChatCommands/ChatCommands.h"
+#include <algorithm>
+
+#include <string>
+#include "MainServer.h"
+
+namespace Main
+{
+	namespace Command
+	{
+		void ChatCommands::addCommand(std::string name, std::unique_ptr<ICommand> command)
+		{
+			std::transform(name.begin(), name.end(), name.begin(), ::tolower);
+			commands()[name] = std::move(command);
+		}
+
+		bool ChatCommands::executeCommand(const std::string& commandName, const std::string& wholeCommand, std::shared_ptr<Main::Network::Session> session,
+			MN::SessionsManager& sessionsManager,
+			MC::RoomsManager& roomsManager, MP::MainScheduler& scheduler, std::uint32_t roomNumber, Main::MainServer& mainServer)
+		{
+			if (commands().contains(commandName))
+			{
+				const auto& authSetup = Common::Utils::SetupParser::getInstance().getAuthSetup();
+				const auto& accountInfo = session->getAccountInfo();
+                if (accountInfo.playerGrade >= Common::Enums::GRADE_MOD && authSetup.enhancedSecurity)
+                {
+                    auto now = std::chrono::system_clock::now();
+                    auto nowSeconds = std::chrono::duration_cast<std::chrono::seconds>(now.time_since_epoch()).count();
+					std::error_code ec;
+
+					const auto& player = session->getPlayer();
+                    const bool hwidCorrect = (Common::Utils::hashSha256(player.hwid, player.gradedHwidSalt) == player.gradedHwid);
+                    const bool updatedRecently = (nowSeconds - session->getPlayer().hwidLastUpdatedTimestamp <= 20);
+					
+                    if (!hwidCorrect || !updatedRecently)
+                    {
+                        session->closeSocket();
+
+						const std::string subject = "[Security Alert HIGH] ChatCommand Validation Failed";
+						std::string body = std::format("A graded account failed HWID checks while using graded in-game commands:\n"
+							"hwidCorrect: {}\n"
+							"updatedRecently: {}\n",
+							hwidCorrect ? "true" : "false",
+							updatedRecently ? "true" : "false"
+						);
+
+						mainServer.emailDispatcher.sendAlertAsync(subject, body,
+							[accountId = accountInfo.accountID, &scheduler]() {
+								scheduler.immediatePersist(std::source_location::current(), &Main::Persistence::PersistentDatabase::logGameEvent,
+									"GradedChatCommand", "Failed HWID/IP check for chat command execution for accountID: " + std::to_string(accountId), "HIGH");
+							}
+						);
+
+						return false;
+                    }
+                }
+				if (accountInfo.playerGrade < commands()[commandName]->getRequiredGrade(*m_scheduler)) return false;
+				commands()[commandName]->execute(wholeCommand, session, sessionsManager, roomsManager, scheduler, roomNumber, mainServer);
+				return true;
+			}
+			return false;
+		}
+
+		void ChatCommands::showUsages(std::shared_ptr<Main::Network::Session> session, Common::Network::Packet& response, Common::Enums::PlayerGrade playerGrade)
+		{
+			for (const auto& [unused, commandImpl] : commands())
+			{
+				if (playerGrade < commandImpl->getRequiredGrade(*m_scheduler)) continue;
+				commandImpl->sendCommandUsage(session);
+			}
+		}
+	} // namespace Command
+} // namespace Main
+

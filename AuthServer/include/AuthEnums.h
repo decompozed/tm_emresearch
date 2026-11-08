@@ -1,0 +1,25 @@
+#ifndef AUTH_ENUMERATIVES_H
+#define AUTH_ENUMERATIVES_H
+
+#include <cstdint>
+
+namespace Auth
+{
+	namespace Enums
+	{
+		enum Login : std::uint32_t
+		{
+			INCORRECT = 0,           // Incorrect login id or password entered
+			SUCCESS = 1,             // Confirmed account 
+			SUCCESS2 = 37,           // Confirmed account
+			DATA_ERROR = 4,			 // Nickname contains illegal characters because I can not log in, contact support
+			USE_TOKEN = 5,           // originally ACCOUNT_BUSY, unnedeed since we directly disconnect the online player 
+			UNEXISTENT = 13,         // Incorrect login id or password entered
+			TIME_EXPIRED = 24,		 // Connection failed, please choose another server or try again later
+			SUSPENDED = 42,          // Account banned
+			SHUTDOWN = 80            // No message at all, tilts the client (need to close and reopen)
+		};
+	}
+}
+
+#endif

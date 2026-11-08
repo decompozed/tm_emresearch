@@ -1,0 +1,77 @@
+{
+  "id": 58,
+  "end_cam": 10,
+  "maps": [
+    {"id": 10, "offset": [-5242, 7145, 0]},
+    {"id": 22, "offset": [6592, 6693, 0]}
+  ],
+  "corridors": [
+    {
+      "name": "c10_22",
+      "axis": "x",
+      "across": [6528, 7081],
+      "profile": [[-2982, 657, 1480], [-2500, 657, 1480], [-700, 115, 925], [-56, 115, 925]],
+      "render": {
+        "floor": [-2982, -80],
+        "walls": [[-2976, 5], [-2976, 78]],
+        "ceiling": [-2976, -60],
+        "ceiling_end": [[5, 6528], [-41, 6639], [-56, 6757], [-41, 6876], [5, 6986], [78, 7081]],
+        "shell": {"thickness": 30, "range": [-2976, -60]}
+      },
+      "colp": {
+        "floor": [-2995, -56],
+        "walls": [[-2998, 57], [-2998, 130]],
+        "ceiling": [-2998, -30],
+        "ceiling_end": [[57, 6528], [8, 6584], [-23, 6817], [67, 7034], [130, 7081]],
+        "margin": 20
+      },
+      "colb": {
+        "floor": [-2995, -56],
+        "walls": [[-2998, 5], [-2998, 78]],
+        "ceiling": [-2998, -60],
+        "ceiling_end": [[5, 6528], [-41, 6639], [-56, 6757], [-41, 6876], [5, 6986], [78, 7081]],
+        "margin": 20
+      },
+      "caps": [
+        {"at": -2976, "facing": 1, "top": 1480, "colb": true,
+         "hole": [[6678, 657], [6678, 1150], [6687, 1221], [6712, 1290], [6750, 1352], [6813, 1417], [6871, 1456],
+                  [6929, 1417], [6991, 1352], [7030, 1290], [7055, 1221], [7064, 1150], [7064, 657]]}
+      ],
+      "rooms": [
+        {"name": "K1_NDLRM", "box": [[-2978, 6528, 350], [-1600, 7081, 1500]], "effects_from": "C1_NDLRM"},
+        {"name": "K2_NDLRM", "box": [[-1600, 6528, 100], [-103.5, 7081, 1250]], "effects_from": "RC_NDLRM"}
+      ],
+      "room_walls": [{"room": "C1_NDLRM", "normal": [-1, 0, 0], "world": 2978}],
+      "portals": [
+        {"between": ["C1_NDLRM", "K1_NDLRM"], "polygon": [[-2978, 6678, 657], [-2978, 7064, 657], [-2978, 7064, 1456], [-2978, 6678, 1456]]},
+        {"between": ["K1_NDLRM", "K2_NDLRM"], "polygon": [[-1600, 6528, 386], [-1600, 7081, 386], [-1600, 7081, 1203], [-1600, 6528, 1203]]},
+        {"between": ["K2_NDLRM", "RC_NDLRM"], "polygon": [[-103.5, 6528, 115], [-103.5, 7081, 115], [-103.5, 7081, 925], [-103.5, 6528, 925]]}
+      ],
+      "walk": {"from": -3300, "to": 250, "lanes": [0, -90, 90], "inside": [-2990, 0]},
+      "materials": [
+        {"until": -1600,
+         "wall": {"texture": "swall04.dds", "near": [-3007, 7100, 1000]},
+         "floor": {"texture": "sbottom02.dds", "near": [-3100, 6870, 657]},
+         "ceiling": {"texture": "pwall18.dds", "near": [-3200, 6870, 1620]}},
+        {"until": null, "room": "K2_NDLRM",
+         "wall": {"texture": "REDC2.dds", "near": [-41, 6876, 100]},
+         "floor": {"texture": "P_conc8.dds", "near": [0, 6757, 115]},
+         "ceiling": {"texture": "REDC_INSIDE2.dds", "near": [100, 6757, 1120]}}
+      ],
+      "cuts": [
+        {"label": "castle arch", "file": "World.nif", "mode": "remove", "map": "m010", "vertical": true,
+         "box": [[-2981, 6610, 650], [-2975, 7130, 1460]], "expect": 7},
+        {"label": "paper apse", "file": "World.nif", "mode": "remove", "map": "RC_NDLRM", "vertical": true,
+         "box": [[-60, 6527, -1], [80, 7082, 926]], "expect": 20},
+        {"label": "castle arch", "file": "World_colp.nif", "mode": "clip", "names": ["coc_sand"], "vertical": true,
+         "box": [[-3003, 6690, 660], [-2993, 7055, 1250]]},
+        {"label": "paper apse", "file": "World_colp.nif", "mode": "clip", "names": ["coc_sand"], "vertical": true,
+         "box": [[-30, 6528, -10], [140, 7081, 925]]},
+        {"label": "castle arch", "file": "World_colb.nif", "mode": "remove", "names": ["cob_sand"], "vertical": true,
+         "box": [[-2981, 6660, 650], [-2975, 7090, 1500]], "expect": 3},
+        {"label": "paper apse", "file": "World_colb.nif", "mode": "clip", "names": ["cob_sand"], "vertical": true,
+         "box": [[-60, 6528, -10], [95, 7081, 925]]}
+      ]
+    }
+  ]
+}

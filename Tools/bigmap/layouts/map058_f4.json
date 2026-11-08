@@ -1,0 +1,36 @@
+{
+ "extends": "map058_f3.json",
+ "map_keys": {
+  "10": {"tdm_extra": ["FFA/04", "FFA/09", "FFA/14", "FFA/16", "FFA/17", "FFA/24"]},
+  "22": {"drop_spawns": ["FFA/11", "TDM/REDTEAM/08"]},
+  "26": {"tdm_extra": ["FFA/04", "FFA/05", "FFA/09", "FFA/11", "FFA/13", "FFA/14", "FFA/16", "FFA/17", "FFA/20", "FFA/21",
+                       "FFA/23", "FFA/24"]}
+ },
+ "cover_material": {
+  "texture": "box4.dds",
+  "near": [-921, -4708, 461],
+  "faces": {"top": [0.0, 0.0, 0.5, 0.5], "side": [0.0, 0.5, 0.5, 1.0], "end": [0.5, 0.5, 1.0, 1.0]}
+ },
+ "corridor_keys": {
+  "c10_22": {"covers": [
+   {"at": -2600, "side": 0, "length": 160, "depth": 276, "boxes": [150, 150], "inset": 12},
+   {"at": -1750, "side": 1, "length": 220, "depth": 276, "boxes": [110]},
+   {"at": -400, "side": 1, "length": 160, "depth": 276, "boxes": [150, 150], "inset": 12}
+  ]},
+  "c10_26": {"covers": [
+   {"at": -300, "side": 0, "length": 160, "depth": 180, "boxes": [150, 150], "inset": 12},
+   {"at": 1100, "side": 1, "length": 220, "depth": 180, "boxes": [110]},
+   {"at": 2900, "side": 0, "length": 160, "depth": 180, "boxes": [150, 150], "inset": 12}
+  ]},
+  "c26_39": {"covers": [
+   {"at": 200, "side": 0, "length": 160, "depth": 144, "boxes": [150, 150], "inset": 12},
+   {"at": 2600, "side": 1, "length": 220, "depth": 144, "boxes": [110]},
+   {"at": 5500, "side": 0, "length": 160, "depth": 144, "boxes": [150, 150], "inset": 12}
+  ]},
+  "c39_22": {"covers": [
+   {"at": 400, "side": 0, "length": 160, "depth": 144, "boxes": [150, 150], "inset": 12},
+   {"at": 2200, "side": 1, "length": 220, "depth": 144, "boxes": [110]},
+   {"at": 4500, "side": 0, "length": 160, "depth": 144, "boxes": [150, 150], "inset": 12}
+  ]}
+ }
+}
