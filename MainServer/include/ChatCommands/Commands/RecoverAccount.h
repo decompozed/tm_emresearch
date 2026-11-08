@@ -85,7 +85,7 @@ namespace Main
 				}
 
 				bool pwSuccess = scheduler.immediatePersist(std::source_location::current(),
-					&Main::Persistence::PersistentDatabase::updatePasswordByAid, m_targetAid, BCrypt::generateHash(tempPassword));
+					&Main::Persistence::PersistentDatabase::updatePasswordByAid, m_targetAid, Common::Utils::hashPassword(tempPassword));
 
 				bool secretSuccess = scheduler.immediatePersist(std::source_location::current(),
 					&Main::Persistence::PersistentDatabase::updateSecretByAid, m_targetAid, encryptedSecret.value());

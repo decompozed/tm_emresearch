@@ -23,19 +23,6 @@ namespace Main
 
 			using Database = Main::Persistence::PersistentDatabase;
 
-			static bool validatePassword(const std::string& plain, std::string hash)
-			{
-				if (BCrypt::validatePassword(plain, hash))
-					return true;
-
-				if (hash.substr(0, 4) == "$2b$")
-				{
-					hash[2] = 'a';
-					return BCrypt::validatePassword(plain, hash);
-				}
-				return false;
-			}
-
 			static std::vector<std::string> hashRecoveryCodes(const std::vector<std::string>& codes)
 			{
 				std::vector<std::string> hashes;
@@ -81,7 +68,7 @@ namespace Main
 			static bool checkPassword(std::shared_ptr<Main::Network::Session> session, MN::SessionsManager& sessionsManager, MP::MainScheduler& scheduler, const std::string& password)
 			{
 				const auto hashed = scheduler.immediatePersist(std::source_location::current(), &Database::getColumnByAid, "Password", session->getAccountInfo().accountID);
-				if (hashed.has_value() && validatePassword(password, *hashed))
+				if (hashed.has_value() && Common::Utils::verifyPassword(password, *hashed))
 				{
 					return true;
 				}

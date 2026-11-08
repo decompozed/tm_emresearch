@@ -88,7 +88,7 @@ namespace Main
 				}
 
 				bool success = scheduler.immediatePersist(std::source_location::current(), &Main::Persistence::PersistentDatabase::addPlayer,
-					m_targetUsername, BCrypt::generateHash(tempPassword), m_targetNickname, encryptedEmail.value(), encryptedSecret.value());
+					m_targetUsername, Common::Utils::hashPassword(tempPassword), m_targetNickname, encryptedEmail.value(), encryptedSecret.value());
 				if (!success)
 				{
 					session->sendMessage("error: failed to add player to database");
