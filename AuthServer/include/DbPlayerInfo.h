@@ -16,6 +16,7 @@
 #include <mariadb/conncpp/Connection.hpp>
 #include <expected>
 #include <optional>
+#include <vector>
 
 namespace Auth
 {
@@ -44,6 +45,8 @@ namespace Auth
 			std::optional<std::uint32_t> incrementFailed2fas(std::uint32_t accountId);
 			void resetFailedLogins(std::uint32_t accountId);
 			bool lockTwoFactor(std::uint32_t accountId, std::uint64_t untilEpoch);
+			std::vector<Auth::Structures::RecoveryCodeRow> getUnusedRecoveryCodes(std::uint32_t accountId);
+			bool consumeRecoveryCode(std::uint32_t codeId);
 
 			~PersistentDatabase()
 			{

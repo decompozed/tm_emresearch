@@ -43,6 +43,7 @@ namespace Auth
 
 		enum class SecondFactor { Valid, Invalid, Replayed };
 		SecondFactor verifySecondFactor(const Auth::Structures::BasicAccountInfo& ainfo, const std::optional<std::string>& token);
+		SecondFactor verifyRecoveryCode(std::uint32_t accountId, const std::string& code);
 
 		bool validatePassword(const std::string& plain, std::string hash);
 	};

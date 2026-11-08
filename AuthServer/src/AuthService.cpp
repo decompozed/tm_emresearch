@@ -339,7 +339,7 @@ namespace Auth
 		res.username = rawUsername.substr(0, pos);
 		res.token = Totp::toUpper(rawUsername.substr(pos + 1));
 
-		if (!Totp::isTotpCode(*res.token))
+		if (!Totp::isTotpCode(*res.token) && !Totp::isRecoveryCode(*res.token))
 		{
 			res.token->clear();
 		}
@@ -355,6 +355,11 @@ namespace Auth
 		}
 
 		const std::uint32_t accountId = ainfo.ainfoClient.accountId;
+		if (Totp::isRecoveryCode(*token))
+		{
+			return verifyRecoveryCode(accountId, *token);
+		}
+
 		const auto secret = Common::Utils::decrypt2FASecret(ainfo.secret, Common::Utils::SetupParser::getInstance().getGeneralSetup().twoFaSecret);
 		if (!secret)
 		{
@@ -373,6 +378,35 @@ namespace Auth
 			return SecondFactor::Replayed;
 		}
 		return SecondFactor::Valid;
+	}
+
+	AuthService::SecondFactor AuthService::verifyRecoveryCode(std::uint32_t accountId, const std::string& code)
+	{
+		for (const auto& row : m_persistentDatabase.getUnusedRecoveryCodes(accountId))
+		{
+			if (!BCrypt::validatePassword(code, row.hash))
+			{
+				continue;
+			}
+
+			if (!m_persistentDatabase.consumeRecoveryCode(row.id))
+			{
+				return SecondFactor::Replayed;
+			}
+
+			m_persistentDatabase.logGameEvent("AuthLogin2fa", "Recovery code used for account " + std::to_string(accountId), "HIGH");
+			if (Common::Utils::SetupParser::getInstance().getAuthSetup().enhancedSecurity)
+			{
+				m_emailDispatcher.sendAlertAsync("[HIGH Alert] TB - 2FA Recovery Code Used",
+					"High Level Alert: Account(ID: " + std::to_string(accountId) + ") logged in with a recovery code instead of its authenticator",
+					[accountId, this]() {
+						m_persistentDatabase.logGameEvent("EmailGraded", "Failed to send alert after recovery code use for accountID: " + std::to_string(accountId), "HIGH");
+					}
+				);
+			}
+			return SecondFactor::Valid;
+		}
+		return SecondFactor::Invalid;
 	}
 
 	std::expected<Auth::Structures::BasicAccountInfo, Auth::Enums::Login> 

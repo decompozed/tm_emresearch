@@ -293,6 +293,43 @@ namespace Auth
 			}
 		}
 
+		std::vector<Auth::Structures::RecoveryCodeRow> PersistentDatabase::getUnusedRecoveryCodes(std::uint32_t accountId)
+		{
+			std::vector<Auth::Structures::RecoveryCodeRow> rows;
+			try
+			{
+				std::unique_ptr<sql::PreparedStatement> stmt(con->prepareStatement(
+					"SELECT ID, CodeHash FROM TwoFactorRecoveryCodes WHERE AccountID = ? AND UsedAt IS NULL"));
+				stmt->setUInt(1, accountId);
+				std::unique_ptr<sql::ResultSet> res(stmt->executeQuery());
+				while (res->next())
+				{
+					rows.push_back({ res->getUInt("ID"), res->getString("CodeHash").c_str() });
+				}
+			}
+			catch (const sql::SQLException& e)
+			{
+				::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), ::Utils::LogType::Error, "PersistentDatabase::getUnusedRecoveryCodes");
+			}
+			return rows;
+		}
+
+		bool PersistentDatabase::consumeRecoveryCode(std::uint32_t codeId)
+		{
+			try
+			{
+				std::unique_ptr<sql::PreparedStatement> stmt(con->prepareStatement(
+					"UPDATE TwoFactorRecoveryCodes SET UsedAt = UTC_TIMESTAMP() WHERE ID = ? AND UsedAt IS NULL"));
+				stmt->setUInt(1, codeId);
+				return stmt->executeUpdate() > 0;
+			}
+			catch (const sql::SQLException& e)
+			{
+				::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), ::Utils::LogType::Error, "PersistentDatabase::consumeRecoveryCode");
+				return false;
+			}
+		}
+
 		bool PersistentDatabase::removeGradeAndSuspend(std::uint32_t accountId, bool isGraded)
 		{
 			using namespace std::chrono;

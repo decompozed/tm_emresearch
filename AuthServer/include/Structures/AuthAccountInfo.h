@@ -41,6 +41,12 @@ PACK_POP()
 			std::uint64_t twoFactorLockedUntil{};
 		};
 
+		struct RecoveryCodeRow
+		{
+			std::uint32_t id{};
+			std::string hash{};
+		};
+
 		struct Parsed2faLogin 
 		{
 			std::string username;
