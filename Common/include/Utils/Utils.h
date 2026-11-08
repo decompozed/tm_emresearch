@@ -23,6 +23,7 @@
 #include "../Network/Session.h"
 #include "SetupParser.h"
 #include "Totp.h"
+#include "PasswordHash.h"
 
 #include <chrono>
 #include <string>
@@ -441,6 +442,29 @@ namespace Common
 		inline std::string generate2FASecret()
 		{
 			return Totp::generateSecret();
+		}
+
+		inline std::string hashPassword(const std::string& password)
+		{
+			const auto& peppers = SetupParser::getInstance().getGeneralSetup().passwordPeppers;
+			if (peppers.current)
+			{
+				if (auto hashed = PasswordHash::hash(password, *peppers.current))
+				{
+					return *hashed;
+				}
+			}
+			return BCrypt::generateHash(password);
+		}
+
+		inline bool verifyPassword(const std::string& password, const std::string& stored)
+		{
+			return PasswordHash::verify(password, stored, SetupParser::getInstance().getGeneralSetup().passwordPeppers);
+		}
+
+		inline bool passwordNeedsUpgrade(const std::string& stored)
+		{
+			return PasswordHash::needsUpgrade(stored, SetupParser::getInstance().getGeneralSetup().passwordPeppers);
 		}
 	}
 }

@@ -393,9 +393,62 @@ namespace Common
             return setup;
         }
 
+        // The value of the setting names an environment variable holding 32 bytes in hex, like the other secrets
+        static std::optional<std::string> readPepperKey(ini::IniSection& section, const std::string& setting)
+        {
+            if (!section.contains(setting))
+            {
+                return std::nullopt;
+            }
+
+            const char* keyHex = std::getenv(section[setting].as<std::string>().c_str());
+            if (!keyHex)
+            {
+                return std::nullopt;
+            }
+
+            std::string decoded;
+            if (std::strlen(keyHex) == PasswordHash::pepperBytes * 2)
+            {
+                CryptoPP::StringSource ss(keyHex, true, new CryptoPP::HexDecoder(new CryptoPP::StringSink(decoded)));
+            }
+
+            if (decoded.size() != PasswordHash::pepperBytes)
+            {
+                ::Utils::Logger::log(setting + " must be 32 bytes in hex", ::Utils::LogType::Error, "SetupParser::readPepperKey");
+                return std::nullopt;
+            }
+            return decoded;
+        }
+
+        static PasswordHash::Peppers readPasswordPeppers(ini::IniFile& file)
+        {
+            PasswordHash::Peppers peppers;
+            if (file.contains("General"))
+            {
+                ini::IniSection& section = file["General"];
+                const std::uint32_t version = section.contains("PasswordPepperVersion") ? section["PasswordPepperVersion"].as<std::uint32_t>() : 1;
+                if (const auto key = readPepperKey(section, "PasswordPepper"))
+                {
+                    peppers.current = PasswordHash::Pepper{ version, *key };
+                }
+                if (const auto key = readPepperKey(section, "PasswordPepperPrevious"); key && version > 0)
+                {
+                    peppers.previous = PasswordHash::Pepper{ version - 1, *key };
+                }
+            }
+
+            if (!peppers.current)
+            {
+                ::Utils::Logger::log("No password pepper configured: passwords stay on bcrypt", ::Utils::LogType::Warning, "SetupParser::readPasswordPeppers");
+            }
+            return peppers;
+        }
+
         GeneralSetup SetupParser::getGeneralSetupImpl()
         {
             GeneralSetup generalSetup;
+            generalSetup.passwordPeppers = readPasswordPeppers(m_iniFile);
 
             if (!m_authSetup.enhancedSecurity)
             {

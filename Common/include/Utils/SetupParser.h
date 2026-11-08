@@ -2,6 +2,7 @@
 #define COMMON_SETUP_PARSER_H
 
 #include <mutex>
+#include "PasswordHash.h"
 #include <utility>
 #include <vector>
 #include <iostream>
@@ -78,6 +79,7 @@ namespace Common
         {
             CryptoPP::SecByteBlock emailSecret;
             CryptoPP::SecByteBlock  twoFaSecret;
+            PasswordHash::Peppers passwordPeppers;
             std::string smtpServer;
             std::string email;
             std::string emailUsername;
