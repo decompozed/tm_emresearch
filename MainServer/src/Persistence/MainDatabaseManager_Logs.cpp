@@ -61,7 +61,7 @@ namespace Main
         {
             try
             {
-                std::string truncatedMessage = message.substr(0, 300);
+                std::string truncatedMessage = Common::Utils::Totp::redactCommandForLog(message).substr(0, 300);
                 std::string sql = "INSERT INTO ChatLogs (AccountID, Message) VALUES (?, ?)";
                 std::unique_ptr<sql::PreparedStatement> stmt(m_con->prepareStatement(sql));
                 stmt->setUInt(1, accountID);
