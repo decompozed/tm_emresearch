@@ -22,6 +22,7 @@
 #include <vector>
 #include "../Network/Session.h"
 #include "SetupParser.h"
+#include "Totp.h"
 
 #include <chrono>
 #include <string>
@@ -429,18 +430,9 @@ namespace Common
 			return result;
 		}
 
-		inline std::string generate2FASecret(std::size_t len = 16)
+		inline std::string generate2FASecret()
 		{
-			const std::string chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ234567";
-			std::random_device rd;
-			std::mt19937 gen(rd());
-			std::uniform_int_distribution<size_t> dist(0, chars.size() - 1);
-
-			std::string result;
-			result.reserve(len);
-			for (size_t i = 0; i < len; ++i)
-				result += chars[dist(gen)];
-			return result;
+			return Totp::generateSecret();
 		}
 	}
 }
