@@ -97,7 +97,10 @@ namespace Common
             void setData(const std::uint8_t* data, uint16_t size)
             {
                 m_data.resize(size); 
-                std::memcpy(m_data.data(), data, size); 
+                if (size != 0)
+                {
+                    std::memcpy(m_data.data(), data, size);
+                }
                 m_header.setSize(8 /*header size*/ + size);
             }
 

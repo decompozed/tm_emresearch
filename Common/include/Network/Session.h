@@ -62,7 +62,7 @@ namespace Common
 			std::uint32_t m_aid = 0;
 			std::string m_ip;
 			std::string m_gradedIp{ "" };
-			std::uint_least16_t m_port;
+			std::uint_least16_t m_port{ 0 };
 			static inline std::atomic<std::uint64_t> s_nextCorrId{ 0 };
 			std::uint64_t m_corrId{ ++s_nextCorrId };   // ties the security events of one connection together
 			std::vector<std::uint8_t> m_sendBuf{};

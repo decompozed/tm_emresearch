@@ -16,8 +16,8 @@ namespace Common
 	{
 		struct Crypt
 		{
-			uint32_t RC5S[26];
-			uint32_t RC6S[84];
+			uint32_t RC5S[26]{};
+			uint32_t RC6S[84]{};
 			uint32_t UserKey = 0;
 			bool isUsed = true;
 
