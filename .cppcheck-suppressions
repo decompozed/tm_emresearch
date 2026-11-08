@@ -3,3 +3,8 @@
 selfInitialization
 // callbacks[idx] = std::move(fnct) is an assignment, cppcheck reads the result as unused.
 ignoredReturnValue:Common/include/Network/Session.h
+// nickname is a reference to char[16] from AccountInfo, so sizeof gives 16 and not the size of a pointer.
+pointerSize:MainServer/include/HaveApi/ChatColorMessages.h
+pointerSize:MainServer/include/HaveApi/WeaponGlowMessages.h
+// A defaulted operator<=> in a struct with bit fields, valid C++20 that cppcheck cannot parse.
+syntaxError:MainServer/include/Structures/Item/MainItemSerialInfo.h
