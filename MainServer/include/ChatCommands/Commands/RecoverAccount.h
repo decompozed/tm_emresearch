@@ -96,6 +96,10 @@ namespace Main
 					return;
 				}
 
+				// Codes issued before the reset must not outlive it
+				scheduler.immediatePersist(std::source_location::current(),
+					&Main::Persistence::PersistentDatabase::replaceRecoveryCodes, m_targetAid, std::vector<std::string>{});
+
 				session->sendMessage("success: account password and 2FA secret have been reset");
 
 				std::ostringstream emailBody;
