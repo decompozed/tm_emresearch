@@ -2,11 +2,14 @@
 #define COMMON_UTILS_SECRET_SOURCE_H
 
 #include <cstdlib>
+#include <exception>
+#include <filesystem>
 #include <fstream>
 #include <functional>
 #include <iterator>
 #include <optional>
 #include <string>
+#include <system_error>
 
 // Where a secret comes from: the environment variable NAME, or a file whose path is in NAME_FILE (the Docker secrets
 // convention, so a secret can be mounted as a file instead of showing up in "docker inspect").
@@ -92,13 +95,30 @@ namespace Common
 					result.error = fileVariable + " is set but empty";
 					return result;
 				}
+				// On Linux a directory opens without an error and only throws when it is read. Docker creates a directory
+				// when the file of a bind mount is missing, so this does happen.
+				std::error_code directoryError;
+				if (std::filesystem::is_directory(filePath, directoryError))
+				{
+					result.error = std::string("The secret file named by ") + fileVariable + " is a directory";
+					return result;
+				}
 				std::ifstream file(filePath, std::ios::binary);
 				if (!file)
 				{
 					result.error = std::string("Cannot open the secret file named by ") + fileVariable;
 					return result;
 				}
-				std::string content((std::istreambuf_iterator<char>(file)), std::istreambuf_iterator<char>());
+				std::string content;
+				try
+				{
+					content.assign(std::istreambuf_iterator<char>(file), std::istreambuf_iterator<char>());
+				}
+				catch (const std::exception&)
+				{
+					result.error = std::string("Cannot read the secret file named by ") + fileVariable;
+					return result;
+				}
 				if (file.bad())
 				{
 					result.error = std::string("Cannot read the secret file named by ") + fileVariable;
