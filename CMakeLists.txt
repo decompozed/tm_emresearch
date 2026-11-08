@@ -25,6 +25,21 @@ else()
     set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_SOURCE_DIR}/Output)
 endif()
 
+# Compiler and linker hardening. Set here once so every target below (and the Tests) gets it.
+# Warnings are not turned into errors for the server.
+if (MSVC)
+    # /GS: stack cookies (on by default, explicit so it stays), /guard:cf: Control Flow Guard checks on indirect calls,
+    # /sdl is not used: it turns C4996 (getenv in Logger.cpp, SetupParser.cpp, ModeLogWriter.cpp, CastLoadTest) into errors.
+    add_compile_options(/GS /guard:cf)
+    add_link_options(/DYNAMICBASE /HIGHENTROPYVA /GUARD:CF /CETCOMPAT)
+elseif (CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    # OpenSSF compiler options guide. Not compiled on the Windows build machine.
+    add_compile_options(-fstack-protector-strong -fstack-clash-protection -fPIE)
+    add_compile_options("$<$<CONFIG:Release,RelWithDebInfo,MinSizeRel>:-U_FORTIFY_SOURCE;-D_FORTIFY_SOURCE=3>")
+    add_compile_definitions(_GLIBCXX_ASSERTIONS)
+    add_link_options(-pie -Wl,-z,relro -Wl,-z,now -Wl,-z,noexecstack)
+endif()
+
 #find_package(Boost REQUIRED COMPONENTS system json beast asio)
 find_package(Boost CONFIG REQUIRED COMPONENTS system json beast asio)
 find_package(OpenSSL REQUIRED)
