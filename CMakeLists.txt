@@ -29,6 +29,7 @@ endif()
 find_package(Boost CONFIG REQUIRED COMPONENTS system json beast asio)
 find_package(OpenSSL REQUIRED)
 find_package(cryptopp CONFIG REQUIRED)
+find_package(unofficial-sodium CONFIG REQUIRED)
 find_package(range-v3 CONFIG REQUIRED)
 find_package(unofficial-mariadb-connector-cpp CONFIG REQUIRED)
 

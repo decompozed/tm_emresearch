@@ -44,6 +44,7 @@ target_include_directories(Common
 target_link_libraries(Common
     PUBLIC
         cryptopp::cryptopp
+        unofficial-sodium::sodium
         unofficial::mariadb-connector-cpp::mariadbcpp
         bcrypt          # libbcrypt
         Boost::json
