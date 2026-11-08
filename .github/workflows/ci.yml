@@ -9,6 +9,11 @@ on:
 permissions:
   contents: read
 
+# With an explicit shell a step also fails when a command in the middle of a pipe fails
+defaults:
+  run:
+    shell: bash
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
