@@ -40,8 +40,9 @@ target_include_directories(Tests
 
 target_link_libraries(Tests PRIVATE GTest::gtest GTest::gtest_main cryptopp::cryptopp) # cryptopp: HaveApi/DllProof.h
 target_link_libraries(Tests PRIVATE OpenSSL::SSL OpenSSL::Crypto)
+target_link_libraries(Tests PRIVATE bcrypt unofficial-sodium::sodium) # Utils/PasswordHash.h
 if (WIN32)
-    target_link_libraries(Tests PRIVATE ws2_32 mswsock)
+    target_link_libraries(Tests PRIVATE "bcrypt.lib" ws2_32 mswsock)
 endif()
 
 if (MSVC)
