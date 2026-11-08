@@ -23,6 +23,7 @@
 #include <utility>
 #include "Utils/Logger.h"
 #include "Utils/Utils.h"
+#include "Utils/Totp.h"
 #include <Enums/PlayerEnums.h>
 #include <cstdint>
 
@@ -47,7 +48,13 @@ namespace Auth
 
 					::Utils::Logger::log("Connected to database at " + dbSetup.ip + ":" + std::to_string(dbSetup.port) + ", using database " + dbSetup.databaseName,
 						::Utils::LogType::Info);
-					return;  
+
+					std::unique_ptr<sql::Statement> schemaStmt(con->createStatement());
+					for (const char* statement : Common::Utils::Totp::schemaStatements)
+					{
+						schemaStmt->execute(statement);
+					}
+					return;
 				}
 				catch (sql::SQLException& e)
 				{
@@ -166,6 +173,9 @@ namespace Auth
 					playerInfoStructure.grade = static_cast<std::uint32_t>(res->getInt("Grade"));
 					playerInfoStructure.encryptedEmail = res->getString("Email").c_str();
 					playerInfoStructure.secret = res->getString("Secret").c_str();
+					playerInfoStructure.twoFactorEnabled = res->getInt("TwoFactorEnabled") != 0;
+					playerInfoStructure.totpLastStep = res->getUInt64("TotpLastStep");
+					playerInfoStructure.twoFactorLockedUntil = res->getUInt64("TwoFactorLockedUntil");
 					playerInfoStructure.hashedPassword = res->getString("Password").c_str();
 					playerInfoStructure.suspendedUntil = res->getString("SuspendedUntil").c_str();
 					playerInfoStructure.ainfoClient.accountId = static_cast<std::uint32_t>(res->getInt("AccountID"));
@@ -196,6 +206,90 @@ namespace Auth
 			{
 				::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), ::Utils::LogType::Error, "PersistentDatabase::getPlayerInfo");
 				return std::unexpected(Auth::Enums::Login::DATA_ERROR);
+			}
+		}
+
+		// The WHERE clause makes this atomic: of two logins with the same code, only one can move the step forward
+		bool PersistentDatabase::consumeTotpStep(std::uint32_t accountId, std::uint64_t step)
+		{
+			try
+			{
+				std::unique_ptr<sql::PreparedStatement> stmt(con->prepareStatement(
+					"UPDATE Users SET TotpLastStep = ? WHERE AccountID = ? AND TotpLastStep < ?"));
+				stmt->setUInt64(1, step);
+				stmt->setUInt(2, accountId);
+				stmt->setUInt64(3, step);
+				return stmt->executeUpdate() > 0;
+			}
+			catch (const sql::SQLException& e)
+			{
+				::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), ::Utils::LogType::Error, "PersistentDatabase::consumeTotpStep");
+				return false;
+			}
+		}
+
+		static std::optional<std::uint32_t> incrementCounter(sql::Connection* con, const std::string& column, std::uint32_t accountId)
+		{
+			try
+			{
+				std::unique_ptr<sql::PreparedStatement> update(con->prepareStatement("UPDATE Users SET " + column + " = " + column + " + 1 WHERE AccountID = ?"));
+				update->setUInt(1, accountId);
+				update->executeUpdate();
+
+				std::unique_ptr<sql::PreparedStatement> select(con->prepareStatement("SELECT " + column + " FROM Users WHERE AccountID = ?"));
+				select->setUInt(1, accountId);
+				std::unique_ptr<sql::ResultSet> res(select->executeQuery());
+				if (res->next())
+				{
+					return res->getUInt(column);
+				}
+			}
+			catch (const sql::SQLException& e)
+			{
+				::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), ::Utils::LogType::Error, "PersistentDatabase::incrementCounter");
+			}
+			return std::nullopt;
+		}
+
+		std::optional<std::uint32_t> PersistentDatabase::incrementFailedPasswords(std::uint32_t accountId)
+		{
+			return incrementCounter(con, "FailedPasswordCount", accountId);
+		}
+
+		std::optional<std::uint32_t> PersistentDatabase::incrementFailed2fas(std::uint32_t accountId)
+		{
+			return incrementCounter(con, "Failed2faCount", accountId);
+		}
+
+		void PersistentDatabase::resetFailedLogins(std::uint32_t accountId)
+		{
+			try
+			{
+				std::unique_ptr<sql::PreparedStatement> stmt(con->prepareStatement(
+					"UPDATE Users SET FailedPasswordCount = 0, Failed2faCount = 0 WHERE AccountID = ?"));
+				stmt->setUInt(1, accountId);
+				stmt->executeUpdate();
+			}
+			catch (const sql::SQLException& e)
+			{
+				::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), ::Utils::LogType::Error, "PersistentDatabase::resetFailedLogins");
+			}
+		}
+
+		bool PersistentDatabase::lockTwoFactor(std::uint32_t accountId, std::uint64_t untilEpoch)
+		{
+			try
+			{
+				std::unique_ptr<sql::PreparedStatement> stmt(con->prepareStatement(
+					"UPDATE Users SET TwoFactorLockedUntil = ?, Failed2faCount = 0 WHERE AccountID = ?"));
+				stmt->setUInt64(1, untilEpoch);
+				stmt->setUInt(2, accountId);
+				return stmt->executeUpdate() > 0;
+			}
+			catch (const sql::SQLException& e)
+			{
+				::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), ::Utils::LogType::Error, "PersistentDatabase::lockTwoFactor");
+				return false;
 			}
 		}
 

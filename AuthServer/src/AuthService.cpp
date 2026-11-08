@@ -13,6 +13,7 @@
 #include <string>
 #include "Utils.h"
 #include "Utils/SetupParser.h"
+#include "Utils/Totp.h"
 #include "AuthUtils.h"
 #include <libcppotp/auth.h>
 #include <openssl/rand.h>
@@ -23,6 +24,7 @@
 namespace Auth
 {
 	using namespace Common::Utils;
+	namespace Totp = Common::Utils::Totp;
 
 	bool AuthService::validatePassword(const std::string& plain, std::string hash)
 	{
@@ -132,24 +134,37 @@ namespace Auth
 		}
 
 		const bool passwordOk = validatePassword(plainPw, ainfo.hashedPassword);
-		const bool tokenOk = verifyToken(ainfo.secret, token);
+		// Only a correct password may spend a code, so someone without it cannot burn the owner's current code
+		const SecondFactor secondFactor = passwordOk ? verifySecondFactor(ainfo, token) : SecondFactor::Invalid;
 
-		auto& counters = m_badLoginAttempts[ainfo.ainfoClient.accountId];
+		std::optional<std::uint32_t> wrongPasswords{ 0 };
+		std::optional<std::uint32_t> wrong2fas{ 0 };
 		if (!passwordOk)
 		{
-			++counters.totalWrongPasswords;
+			wrongPasswords = m_persistentDatabase.incrementFailedPasswords(ainfo.ainfoClient.accountId);
 			m_persistentDatabase.logGameEvent("AuthGradedLogin",
 				"Failed login: incorrect password for account " + std::to_string(ainfo.ainfoClient.accountId), "MEDIUM");
 		}
-		else if (!tokenOk)
+		else if (secondFactor == SecondFactor::Invalid)
 		{
-			++counters.totalWrong2fas;
+			wrong2fas = m_persistentDatabase.incrementFailed2fas(ainfo.ainfoClient.accountId);
 			m_persistentDatabase.logGameEvent("AuthGradedLogin",
 				"Failed login: invalid 2FA token for account " + std::to_string(ainfo.ainfoClient.accountId), "MEDIUM");
 		}
+		else if (secondFactor == SecondFactor::Replayed)
+		{
+			// Not a strike: a replayed code reveals nothing to a guesser, and the owner can hit this by reconnecting within 30 s
+			m_persistentDatabase.logGameEvent("AuthGradedLogin",
+				"Failed login: already used 2FA token replayed for account " + std::to_string(ainfo.ainfoClient.accountId), "HIGH");
+		}
+
+		if (!wrongPasswords || !wrong2fas)
+		{
+			return Auth::Enums::Login::INCORRECT; // the attempt could not be counted: fail closed
+		}
 
 		constexpr std::uint32_t MAX_FAILED_ATTEMPTS = 3;
-		if (counters.totalWrongPasswords >= MAX_FAILED_ATTEMPTS || counters.totalWrong2fas >= MAX_FAILED_ATTEMPTS)
+		if (*wrongPasswords >= MAX_FAILED_ATTEMPTS || *wrong2fas >= MAX_FAILED_ATTEMPTS)
 		{
 			if (!tryLockAccount(ainfo.ainfoClient.accountId, true))
 			{
@@ -182,25 +197,74 @@ namespace Auth
 			m_persistentDatabase.logGameEvent("AuthGradedLogin",
 				"Account locked due to repeated failed login attempts: " + std::to_string(ainfo.ainfoClient.accountId), "CRITICAL");
 
-			m_badLoginAttempts.erase(ainfo.ainfoClient.accountId);
+			m_persistentDatabase.resetFailedLogins(ainfo.ainfoClient.accountId);
 			return Auth::Enums::Login::INCORRECT;
 		}
 
-		if (!passwordOk || !tokenOk)
+		if (!passwordOk || secondFactor != SecondFactor::Valid)
 		{
 			return Auth::Enums::Login::INCORRECT;
 		}
 
-		m_badLoginAttempts.erase(ainfo.ainfoClient.accountId);
+		m_persistentDatabase.resetFailedLogins(ainfo.ainfoClient.accountId);
 
-		std::uint64_t currentEpoch = static_cast<std::uint64_t>(std::chrono::duration_cast<std::chrono::seconds>(std::chrono::system_clock::now().time_since_epoch()).count());
-		std::uint64_t suspendedUntilEpoch = Common::Utils::datetimeToEpoch(ainfo.suspendedUntil);
-		if (suspendedUntilEpoch > currentEpoch)
+		if (isSuspended(ainfo))
 		{
 			m_persistentDatabase.logGameEvent("AuthGradedLogin","Login attempt on suspended account " + std::to_string(ainfo.ainfoClient.accountId),"MEDIUM");
 			return Auth::Enums::Login::SUSPENDED;
 		}
 
+		return Auth::Enums::Login::SUCCESS;
+	}
+
+	bool AuthService::isSuspended(const Auth::Structures::BasicAccountInfo& ainfo) const
+	{
+		const std::uint64_t currentEpoch = static_cast<std::uint64_t>(std::time(nullptr));
+		return Common::Utils::datetimeToEpoch(ainfo.suspendedUntil) > currentEpoch;
+	}
+
+	// Accounts that turned on 2FA themselves. Unlike staff they are locked out for a short time instead of being demoted.
+	Auth::Enums::Login AuthService::authorizeWithSecondFactor(const Auth::Structures::BasicAccountInfo& ainfo, const std::optional<std::string>& token, const std::string& plainPw)
+	{
+		const std::uint32_t accountId = ainfo.ainfoClient.accountId;
+		if (!validatePassword(plainPw, ainfo.hashedPassword))
+		{
+			return Auth::Enums::Login::INCORRECT;
+		}
+
+		const std::uint64_t now = static_cast<std::uint64_t>(std::time(nullptr));
+		if (ainfo.twoFactorLockedUntil > now)
+		{
+			m_persistentDatabase.logGameEvent("AuthLogin2fa", "Failed login: 2FA temporarily locked for account " + std::to_string(accountId), "MEDIUM");
+			return Auth::Enums::Login::INCORRECT;
+		}
+
+		const SecondFactor secondFactor = verifySecondFactor(ainfo, token);
+		if (secondFactor == SecondFactor::Replayed)
+		{
+			m_persistentDatabase.logGameEvent("AuthLogin2fa", "Failed login: already used 2FA token replayed for account " + std::to_string(accountId), "HIGH");
+			return Auth::Enums::Login::INCORRECT;
+		}
+
+		if (secondFactor == SecondFactor::Invalid)
+		{
+			m_persistentDatabase.logGameEvent("AuthLogin2fa", "Failed login: invalid 2FA token for account " + std::to_string(accountId), "MEDIUM");
+			const auto wrong2fas = m_persistentDatabase.incrementFailed2fas(accountId);
+			if (wrong2fas && *wrong2fas >= Totp::maxWrongCodesPlayer)
+			{
+				m_persistentDatabase.lockTwoFactor(accountId, now + Totp::playerLockSeconds);
+				m_persistentDatabase.logGameEvent("AuthLogin2fa", "2FA locked for 15 minutes after repeated wrong codes, account " + std::to_string(accountId), "HIGH");
+			}
+			return Auth::Enums::Login::INCORRECT;
+		}
+
+		m_persistentDatabase.resetFailedLogins(accountId);
+
+		if (isSuspended(ainfo))
+		{
+			m_persistentDatabase.logGameEvent("AuthLogin2fa", "Login attempt on suspended account " + std::to_string(accountId), "LOW");
+			return Auth::Enums::Login::SUSPENDED;
+		}
 		return Auth::Enums::Login::SUCCESS;
 	}
 
@@ -273,36 +337,42 @@ namespace Auth
 		}
 
 		res.username = rawUsername.substr(0, pos);
-		res.token = rawUsername.substr(pos + 1);
+		res.token = Totp::toUpper(rawUsername.substr(pos + 1));
 
-		if (res.token->size() != 6 || !std::all_of(res.token->begin(), res.token->end(), ::isdigit))
+		if (!Totp::isTotpCode(*res.token))
 		{
-			res.token->clear(); 
+			res.token->clear();
 		}
 
 		return res;
 	}
 
-	bool AuthService::verifyToken(const std::string& encryptedSecret, const std::optional<std::string>& token)
+	AuthService::SecondFactor AuthService::verifySecondFactor(const Auth::Structures::BasicAccountInfo& ainfo, const std::optional<std::string>& token)
 	{
-		if (encryptedSecret.empty() || !token.has_value()) return false;
-
-		auto optSecret = Common::Utils::decrypt2FASecret(encryptedSecret, Common::Utils::SetupParser::getInstance().getGeneralSetup().twoFaSecret);
-		if (!optSecret) return false;
-
-		const int t_interval = 30;
-		std::time_t now = std::time(nullptr);
-
-		for (int i = -1; i <= 1; ++i)
+		if (ainfo.secret.empty() || !token.has_value() || token->empty())
 		{
-			auto expectedToken = auth::generateToken(optSecret.value(), now + i * t_interval, t_interval);
-			std::ostringstream oss;
-			oss << std::setw(6) << std::setfill('0') << expectedToken;
-
-			if (oss.str() == token.value()) return true;
+			return SecondFactor::Invalid;
 		}
 
-		return false;
+		const std::uint32_t accountId = ainfo.ainfoClient.accountId;
+		const auto secret = Common::Utils::decrypt2FASecret(ainfo.secret, Common::Utils::SetupParser::getInstance().getGeneralSetup().twoFaSecret);
+		if (!secret)
+		{
+			m_persistentDatabase.logGameEvent("AuthLogin2fa", "Stored 2FA secret could not be decrypted for account " + std::to_string(accountId), "HIGH");
+			return SecondFactor::Invalid;
+		}
+
+		const Totp::MatchResult match = Totp::matchCode(*secret, *token, std::time(nullptr), ainfo.totpLastStep);
+		if (match.status == Totp::MatchStatus::Invalid)
+		{
+			return SecondFactor::Invalid;
+		}
+
+		if (match.status == Totp::MatchStatus::Replayed || !m_persistentDatabase.consumeTotpStep(accountId, match.step))
+		{
+			return SecondFactor::Replayed;
+		}
+		return SecondFactor::Valid;
 	}
 
 	std::expected<Auth::Structures::BasicAccountInfo, Auth::Enums::Login> 
@@ -315,9 +385,19 @@ namespace Auth
 
 		Auth::Structures::BasicAccountInfo userInfo = result.value();
 		const bool enhancedSecurity = Common::Utils::SetupParser::getInstance().getAuthSetup().enhancedSecurity;
-		Auth::Enums::Login authResult = (enhancedSecurity && userInfo.grade >= 3)
-			? authorizeGraded(userInfo, parsed.token, password, plainIp, plainHwid, port, session)
-			: authorizeUngraded(userInfo, parsed.token, password);
+		Auth::Enums::Login authResult = Auth::Enums::Login::INCORRECT;
+		if (enhancedSecurity && userInfo.grade >= 3)
+		{
+			authResult = authorizeGraded(userInfo, parsed.token, password, plainIp, plainHwid, port, session);
+		}
+		else if (userInfo.twoFactorEnabled)
+		{
+			authResult = authorizeWithSecondFactor(userInfo, parsed.token, password);
+		}
+		else
+		{
+			authResult = authorizeUngraded(userInfo, parsed.token, password);
+		}
 
 		if (authResult != Auth::Enums::SUCCESS)
 		{

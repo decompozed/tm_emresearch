@@ -36,12 +36,9 @@ PACK_POP()
 			std::string suspendedUntil{}; // Not sent to client, only used by the server
 			std::string hashedPassword{}; // Not sent to client, only used by the server
 			std::string encryptedEmail{};
-		};
-
-		struct LoginWrongAttempts
-		{
-			std::uint32_t totalWrongPasswords{};
-			std::uint32_t totalWrong2fas{};
+			bool twoFactorEnabled{};
+			std::uint64_t totpLastStep{};
+			std::uint64_t twoFactorLockedUntil{};
 		};
 
 		struct Parsed2faLogin 

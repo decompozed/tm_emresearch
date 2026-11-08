@@ -18,7 +18,6 @@ namespace Auth
 	private:
 		Auth::Persistence::PersistentDatabase& m_persistentDatabase;
 		Common::Utils::EmailDispatcher& m_emailDispatcher;
-		std::unordered_map<std::uint32_t, Auth::Structures::LoginWrongAttempts> m_badLoginAttempts; // [aid] [LoginWrongAttempts]
 
 	public:
 		AuthService(Auth::Persistence::PersistentDatabase& persistentDatabase, Common::Utils::EmailDispatcher& emailDispatcher)
@@ -35,12 +34,15 @@ namespace Auth
 		Auth::Enums::Login authorizeGraded(const Auth::Structures::BasicAccountInfo& ainfo, const std::optional<std::string>& token,
 			const std::string& plainPw, const std::string& plainIp, const std::string& plainHwid, std::uint_least16_t port, std::shared_ptr<Common::Network::Session> session);
 		Auth::Enums::Login authorizeUngraded(const Auth::Structures::BasicAccountInfo& ainfo, const std::optional<std::string>& token, const std::string& clientPw);
+		Auth::Enums::Login authorizeWithSecondFactor(const Auth::Structures::BasicAccountInfo& ainfo, const std::optional<std::string>& token, const std::string& plainPw);
+		bool isSuspended(const Auth::Structures::BasicAccountInfo& ainfo) const;
 
 		bool tryLockAccount(std::uint32_t accountId, bool isGraded);
 		std::uint32_t generateAccountKey() const;
 		std::string generateRandomSalt(std::size_t length = 16) const;
 
-		bool verifyToken(const std::string& encryptedSecret, const std::optional<std::string>& token);
+		enum class SecondFactor { Valid, Invalid, Replayed };
+		SecondFactor verifySecondFactor(const Auth::Structures::BasicAccountInfo& ainfo, const std::optional<std::string>& token);
 
 		bool validatePassword(const std::string& plain, std::string hash);
 	};

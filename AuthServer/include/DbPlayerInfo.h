@@ -15,6 +15,7 @@
 #include <mariadb/conncpp/Driver.hpp>
 #include <mariadb/conncpp/Connection.hpp>
 #include <expected>
+#include <optional>
 
 namespace Auth
 {
@@ -37,6 +38,12 @@ namespace Auth
 			bool getGradedHwid(std::uint32_t accountId, std::string& outHash, std::string& outSalt) const;
 			bool setGradedHwid(std::uint32_t accountId, const std::string& hash, const std::string& salt);
 			bool updateCurrentHwid(std::uint32_t accountId, const std::string& hash, const std::string& salt);
+
+			bool consumeTotpStep(std::uint32_t accountId, std::uint64_t step);
+			std::optional<std::uint32_t> incrementFailedPasswords(std::uint32_t accountId);
+			std::optional<std::uint32_t> incrementFailed2fas(std::uint32_t accountId);
+			void resetFailedLogins(std::uint32_t accountId);
+			bool lockTwoFactor(std::uint32_t accountId, std::uint64_t untilEpoch);
 
 			~PersistentDatabase()
 			{
