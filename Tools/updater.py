@@ -91,6 +91,25 @@ def cmd_brand_assets(args) -> int:
     return 0
 
 
+def cmd_keygen(args) -> int:
+    from tbupdate import signing  # needs the 'cryptography' package, only for the signing commands
+    signing.generate_keypair(Path(args.private), Path(args.public))
+    print(f'(OK) private key {args.private} (keep it off the server), public key {args.public}')
+    return 0
+
+
+def cmd_verify_signed(args) -> int:
+    from tbupdate import signing
+    key = signing.load_public_key_hex(Path(args.public).read_text(encoding='ascii')) if args.public else None
+    try:
+        body = signing.verify_tree(Path(args.root), Path(args.manifest).read_bytes(), Path(args.signature).read_bytes(), key)
+    except signing.VerifyError as e:
+        print(f'(x) refused: {e}', file=sys.stderr)
+        return 1
+    print(f'(OK) signature valid, {len(body["files"])} files match the manifest')
+    return 0
+
+
 def cmd_gui(_args) -> int:
     from tbupdate.gui import run
     return run()
@@ -151,6 +170,18 @@ def parser() -> argparse.ArgumentParser:
     s.add_argument('--out', required=True)
     s.add_argument('--font', help='bold TrueType font for the NV monogram (default: Arial Black, Segoe UI Black, Impact)')
     s.set_defaults(func=cmd_brand_assets)
+
+    s = sub.add_parser('keygen', help='make an Ed25519 key pair for signing update manifests')
+    s.add_argument('--private', required=True)
+    s.add_argument('--public', required=True)
+    s.set_defaults(func=cmd_keygen)
+
+    s = sub.add_parser('verify-signed', help='check update-manifest.json: signature first, then every file hash')
+    s.add_argument('--root', required=True, help='folder holding the files named in the manifest (the microvolts folder)')
+    s.add_argument('--manifest', required=True)
+    s.add_argument('--signature', required=True)
+    s.add_argument('--public', help='public key file (hex); default is the key built into tbupdate/signing.py')
+    s.set_defaults(func=cmd_verify_signed)
 
     s = sub.add_parser('gui', help='graphical front-end for build')
     s.set_defaults(func=cmd_gui)
