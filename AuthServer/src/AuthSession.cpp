@@ -14,6 +14,7 @@
 #include "../include/AuthSession.h"
 #include "Network/Session.h"
 #include "Utils/Logger.h"
+#include "Utils/SecurityEvent.h"
 
 namespace Auth
 {
@@ -31,6 +32,7 @@ namespace Auth
 			Common::Network::Packet incomingPacket;
 			if (!incomingPacket.processIncomingPacket(data.data(), static_cast<std::uint16_t>(data.size()), m_crypt.UserKey))
 			{
+				Common::Utils::SecurityEvent::emit("packet_invalid", "MEDIUM", 0, getIp(), "dropped", "undecodable_packet", corrId());
 				closeSocket();
 				return;
 			}

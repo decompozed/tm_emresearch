@@ -34,7 +34,7 @@ namespace Auth
 		Auth::Enums::Login authorizeGraded(const Auth::Structures::BasicAccountInfo& ainfo, const std::optional<std::string>& token,
 			const std::string& plainPw, const std::string& plainIp, const std::string& plainHwid, std::uint_least16_t port, std::shared_ptr<Common::Network::Session> session);
 		Auth::Enums::Login authorizeUngraded(const Auth::Structures::BasicAccountInfo& ainfo, const std::optional<std::string>& token, const std::string& clientPw);
-		Auth::Enums::Login authorizeWithSecondFactor(const Auth::Structures::BasicAccountInfo& ainfo, const std::optional<std::string>& token, const std::string& plainPw);
+		Auth::Enums::Login authorizeWithSecondFactor(const Auth::Structures::BasicAccountInfo& ainfo, const std::optional<std::string>& token, const std::string& plainPw, const std::string& plainIp);
 		bool isSuspended(const Auth::Structures::BasicAccountInfo& ainfo) const;
 
 		bool tryLockAccount(std::uint32_t accountId, bool isGraded);

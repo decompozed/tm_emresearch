@@ -20,11 +20,13 @@
 #include <cryptopp/osrng.h>
 #include <cryptopp/hex.h>
 #include <libbcrypt/include/bcrypt/BCrypt.hpp>
+#include "Utils/SecurityEvent.h"
 
 namespace Auth
 {
 	using namespace Common::Utils;
 	namespace Totp = Common::Utils::Totp;
+	namespace SecEv = Common::Utils::SecurityEvent;
 
 	bool AuthService::validatePassword(const std::string& plain, std::string hash)
 	{
@@ -201,6 +203,8 @@ namespace Auth
 
 			m_persistentDatabase.logGameEvent("AuthGradedLogin",
 				"Account locked due to repeated failed login attempts: " + std::to_string(ainfo.ainfoClient.accountId), "CRITICAL");
+			SecEv::emit("authn_lockout", "CRITICAL", ainfo.ainfoClient.accountId, plainIp, "locked",
+				*wrongPasswords >= MAX_FAILED_ATTEMPTS ? "too_many_wrong_passwords" : "too_many_wrong_2fa_codes", session ? session->corrId() : std::string{});
 
 			m_persistentDatabase.resetFailedLogins(ainfo.ainfoClient.accountId);
 			return Auth::Enums::Login::INCORRECT;
@@ -229,7 +233,7 @@ namespace Auth
 	}
 
 	// Accounts that turned on 2FA themselves. Unlike staff they are locked out for a short time instead of being demoted.
-	Auth::Enums::Login AuthService::authorizeWithSecondFactor(const Auth::Structures::BasicAccountInfo& ainfo, const std::optional<std::string>& token, const std::string& plainPw)
+	Auth::Enums::Login AuthService::authorizeWithSecondFactor(const Auth::Structures::BasicAccountInfo& ainfo, const std::optional<std::string>& token, const std::string& plainPw, const std::string& plainIp)
 	{
 		const std::uint32_t accountId = ainfo.ainfoClient.accountId;
 		if (!validatePassword(plainPw, ainfo.hashedPassword))
@@ -259,6 +263,7 @@ namespace Auth
 			{
 				m_persistentDatabase.lockTwoFactor(accountId, now + Totp::playerLockSeconds);
 				m_persistentDatabase.logGameEvent("AuthLogin2fa", "2FA locked for 15 minutes after repeated wrong codes, account " + std::to_string(accountId), "HIGH");
+				SecEv::emit("authn_lockout", "HIGH", accountId, plainIp, "locked", "too_many_wrong_2fa_codes");
 			}
 			return Auth::Enums::Login::INCORRECT;
 		}
@@ -419,8 +424,13 @@ namespace Auth
 			std::shared_ptr<Common::Network::Session> session)
 	{
 		const auto parsed = parseUsernameAnd2FA(username);
+		const std::string corrId = session ? session->corrId() : std::string{};
 		const auto result = m_persistentDatabase.getCompletePlayerInfo(parsed.username);
-		if (!result) return std::unexpected(result.error());
+		if (!result)
+		{
+			SecEv::emit("authn_fail", "LOW", 0, plainIp, "fail", "unknown_account_or_db_error", corrId);
+			return std::unexpected(result.error());
+		}
 
 		Auth::Structures::BasicAccountInfo userInfo = result.value();
 		const bool enhancedSecurity = Common::Utils::SetupParser::getInstance().getAuthSetup().enhancedSecurity;
@@ -431,7 +441,7 @@ namespace Auth
 		}
 		else if (userInfo.twoFactorEnabled)
 		{
-			authResult = authorizeWithSecondFactor(userInfo, parsed.token, password);
+			authResult = authorizeWithSecondFactor(userInfo, parsed.token, password, plainIp);
 		}
 		else
 		{
@@ -440,6 +450,9 @@ namespace Auth
 
 		if (authResult != Auth::Enums::SUCCESS)
 		{
+			const bool graded = enhancedSecurity && userInfo.grade >= 3;
+			SecEv::emit("authn_fail", graded ? "MEDIUM" : "LOW", userInfo.ainfoClient.accountId, plainIp, "fail",
+				std::string{ authResult == Auth::Enums::SUSPENDED ? "suspended" : "bad_credentials" } + (graded ? "_staff" : "_player") + " port " + std::to_string(port), corrId);
 			m_persistentDatabase.addHash(userInfo.ainfoClient.accountId, 0); // AccountKey=0 signals failure to MainServer
 			return std::unexpected(authResult);
 		}
