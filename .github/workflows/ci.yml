@@ -1,57 +1,226 @@
-name: C++ CI
+name: Secure pipeline
 
 on:
   push:
   pull_request:
+  workflow_dispatch:
+
+# The token of every job can only read the repository
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  build:
-    runs-on: ubuntu-latest
-
+  secret-scan:
+    name: Secret scan (gitleaks)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup C++ environment
-        uses: aminya/setup-cpp@v1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          compiler: gcc
-          cmake: true
-          ninja: true
-          vcpkg: true
+          fetch-depth: 0 # every commit, not only the latest
+          persist-credentials: false
 
-      - name: Cache CMake build
-        uses: actions/cache@v3
-        with:
-          path: build
-          key: ${{ runner.os }}-cmake-${{ hashFiles('**/CMakeLists.txt') }}
-          restore-keys: |
-            ${{ runner.os }}-cmake-
+      - name: Install gitleaks (checksum verified)
+        run: |
+          curl -sSfL -o gitleaks.tar.gz https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_linux_x64.tar.gz
+          echo "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb  gitleaks.tar.gz" | sha256sum -c -
+          tar -xzf gitleaks.tar.gz gitleaks
 
-      - name: Cache vcpkg
-        uses: actions/cache@v3
+      - name: Scan the full history
+        run: ./gitleaks git . --redact --verbose --report-format json --report-path gitleaks-report.json
+
+      - name: Keep the report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          path: ~/.cache/vcpkg
-          key: ${{ runner.os }}-vcpkg-${{ hashFiles('**/vcpkg.json') }}
-          restore-keys: |
-            ${{ runner.os }}-vcpkg-
+          name: gitleaks-report
+          path: gitleaks-report.json
+          if-no-files-found: ignore
+
+  sast:
+    name: Static analysis (cppcheck)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install cppcheck
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends cppcheck
+
+      - name: Analyse the server code
+        run: |
+          cppcheck --version
+          cppcheck -j "$(nproc)" --quiet --language=c++ --std=c++20 --enable=warning \
+            --suppress=missingInclude --suppress=unmatchedSuppression --inline-suppr \
+            -I Common/include --xml --output-file=cppcheck.xml AuthServer Common MainServer CastServer
+
+      - name: Summarise the findings
+        run: |
+          python3 - <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
+          import collections
+          import xml.etree.ElementTree as ET
+          errors = ET.parse('cppcheck.xml').getroot().find('errors')
+          counts = collections.Counter(e.get('severity') for e in errors)
+          print('### cppcheck')
+          print('| severity | findings |')
+          print('|---|---|')
+          for severity, count in counts.most_common():
+              print(f'| {severity} | {count} |')
+          PY
+
+      - name: Keep the report
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: cppcheck-report
+          path: cppcheck.xml
+
+  build-test:
+    name: Build, unit tests and SBOM (Linux, gcc-14)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    env:
+      VCPKG_ROOT: ${{ github.workspace }}/.vcpkg
+      VCPKG_DEFAULT_BINARY_CACHE: ${{ github.workspace }}/.cache/vcpkg-bin
+      VCPKG_DISABLE_METRICS: "1"
+      VCPKG_BASELINE: 4e08971f3ddc13018ca858a692efe92d3b6b9fce
+      CC: gcc-14
+      CXX: g++-14
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install the toolchain
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends gcc-14 g++-14 cmake ninja-build git curl zip unzip tar pkg-config python3 \
+            autoconf automake autoconf-archive libtool bison flex ca-certificates binutils
+
+      - name: Restore the compiled dependencies
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .cache/vcpkg-bin
+          key: vcpkg-${{ runner.os }}-gcc14-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'vcpkg-overlays/**') }}
+          restore-keys: vcpkg-${{ runner.os }}-gcc14-
+
+      - name: Get vcpkg at the pinned baseline
+        run: |
+          mkdir -p "$VCPKG_DEFAULT_BINARY_CACHE"
+          git clone -q https://github.com/microsoft/vcpkg.git "$VCPKG_ROOT"
+          git -C "$VCPKG_ROOT" checkout -q "$VCPKG_BASELINE"
+          "$VCPKG_ROOT/bootstrap-vcpkg.sh" -disableMetrics
 
       - name: Configure
-        run: cmake -B build -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE=/usr/local/share/vcpkg/scripts/buildsystems/vcpkg.cmake
+        run: cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_TOOLCHAIN_FILE="$VCPKG_ROOT/scripts/buildsystems/vcpkg.cmake"
 
       - name: Build
-        run: cmake --build build --config Release
+        run: cmake --build build -- -k 0
 
-  secret-scan:
-    runs-on: ubuntu-latest
+      - name: Unit tests
+        run: ctest --test-dir build --output-on-failure
 
-    steps:
-      - name: Checkout code with the full history
-        uses: actions/checkout@v4
+      - name: Manifest signing tests
+        run: |
+          python3 -m pip install --quiet --break-system-packages cryptography
+          python3 Tools/tests/test_signing.py
+
+      - name: Check the hardening in the binaries
+        run: |
+          {
+            for f in AuthServer.elf MainServer.elf CastServer.elf; do
+              [ -f "$f" ] || f="Output/$f"
+              echo "== $f"
+              readelf -h "$f" | grep 'Type:'
+              readelf -lW "$f" | grep -E 'GNU_RELRO|GNU_STACK'
+              readelf -d "$f" | grep -E 'BIND_NOW|FLAGS'
+              echo "stack protector: $(nm -D "$f" | grep -c __stack_chk_fail)"
+              echo "fortify calls:   $(nm -D "$f" | grep -c '_chk@\|_chk$')"
+            done
+          } | tee hardening.txt
+
+      - name: Generate the SBOM from vcpkg
+        run: python3 Tools/sbom/merge_vcpkg_spdx.py --installed build/vcpkg_installed --triplet x64-linux --manifest vcpkg.json --out sbom.spdx.json | tee sbom-completeness.txt
+
+      - name: Keep the SBOM and the hardening report
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
-          fetch-depth: 0 # gitleaks scans every commit, not only the latest
+          name: sbom-and-hardening
+          path: |
+            sbom.spdx.json
+            sbom-completeness.txt
+            hardening.txt
 
-      - name: Scan for committed secrets (gitleaks)
-        uses: gitleaks/gitleaks-action@v2
+  sbom-scan:
+    name: Vulnerability scan of the SBOM (Syft, Grype)
+    runs-on: ubuntu-24.04
+    needs: build-test
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: sbom-and-hardening
+
+      - name: SBOM of the repository as CycloneDX (Syft)
+        uses: anchore/sbom-action@66cbf4bc1f1c0d2edc94016e65bc221b6bb0ad6c # v0.24.3
+        with:
+          path: .
+          format: cyclonedx-json
+          output-file: sbom.cdx.json
+          upload-artifact: false
+          upload-release-assets: false
+
+      - name: Scan the vcpkg SBOM (Grype)
+        id: scan-vcpkg
+        uses: anchore/scan-action@27805bf3b4e84b4a5c980df22ed233c00390a439 # v7.4.2
+        with:
+          sbom: sbom.spdx.json
+          fail-build: false
+          output-format: json
+
+      - name: Scan the repository SBOM (Grype)
+        id: scan-repo
+        uses: anchore/scan-action@27805bf3b4e84b4a5c980df22ed233c00390a439 # v7.4.2
+        with:
+          sbom: sbom.cdx.json
+          fail-build: false
+          output-format: json
+
+      - name: Summarise the findings
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          VCPKG_REPORT: ${{ steps.scan-vcpkg.outputs.json }}
+          REPO_REPORT: ${{ steps.scan-repo.outputs.json }}
+        run: |
+          python3 - <<'PY' | tee -a "$GITHUB_STEP_SUMMARY" | tee scan-summary.txt
+          import collections, json, os
+          for title, variable in (('vcpkg SBOM', 'VCPKG_REPORT'), ('repository SBOM', 'REPO_REPORT')):
+              data = json.load(open(os.environ[variable]))
+              matches = data.get('matches', [])
+              counts = collections.Counter(m['vulnerability']['severity'] for m in matches)
+              print(f'### {title}: {len(matches)} matches')
+              for severity, count in counts.most_common():
+                  print(f'- {severity}: {count}')
+              for m in sorted(matches, key=lambda x: x['vulnerability']['id'])[:40]:
+                  print(f"  {m['vulnerability']['id']} {m['vulnerability']['severity']} {m['artifact']['name']} {m['artifact']['version']}")
+          PY
+          cp "$VCPKG_REPORT" grype-vcpkg.json
+          cp "$REPO_REPORT" grype-repo.json
+
+      - name: Keep the reports
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: sbom-scan
+          path: |
+            sbom.cdx.json
+            grype-vcpkg.json
+            grype-repo.json
+            scan-summary.txt
