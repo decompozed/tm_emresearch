@@ -27,6 +27,7 @@
 #include "../../include/Enums/ExtrasEnums.h"
 #include "../../../MainServer/include/Structures/AccountInfo/MainAccountUniqueId.h"
 #include <include/Utils/SetupParser.h>
+#include "../../include/Utils/SecurityEvent.h"
 
 #include <cryptopp/dh.h>
 #include <cryptopp/osrng.h>
@@ -157,6 +158,7 @@ namespace Common
 			if (m_checkValidSession && !m_isValidSession)
 			{
 				//::Utils::Logger::log("Invalid session with IP: " + m_ip, ::Utils::LogType::Warning, "Session::onRead");
+				Common::Utils::SecurityEvent::emit("authz_denied", "MEDIUM", 0, m_ip, "denied", "connection without a login from this IP", corrId());
 				closeSocket();
 				return;
 			}
@@ -182,6 +184,7 @@ namespace Common
 				if (m_reader.size() + bytes_transferred > 65536)
 				{
 					std::printf("Session::onRead() - Buffer overflow detected, closing connection\n");
+					Common::Utils::SecurityEvent::emit("packet_invalid", "MEDIUM", 0, m_ip, "dropped", "read_buffer_overflow", corrId());
 					closeSocket();
 					return;
 				}
@@ -203,6 +206,7 @@ namespace Common
 						cryptography.RC5Decrypt32(reinterpret_cast<int32_t*>(m_reader.data()), &header, headerSize);
 						if (!header.isValidMain())
 						{
+							Common::Utils::SecurityEvent::emit("packet_invalid", "MEDIUM", 0, m_ip, "dropped", "bad_tcp_header size " + std::to_string(header.getSize()), corrId());
 							closeSocket();
 							return;
 						}
@@ -212,6 +216,7 @@ namespace Common
 						std::memcpy(&header, m_reader.data(), headerSize);
 						if (!header.isValidCast())
 						{
+							Common::Utils::SecurityEvent::emit("packet_invalid", "MEDIUM", 0, m_ip, "dropped", "bad_tcp_header size " + std::to_string(header.getSize()), corrId());
 							closeSocket();
 							return;
 						}

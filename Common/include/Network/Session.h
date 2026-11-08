@@ -3,6 +3,7 @@
 
 #include <asio.hpp>
 #include <array>
+#include <atomic>
 #include <vector>
 #include <unordered_map>
 #include <functional>
@@ -62,6 +63,8 @@ namespace Common
 			std::string m_ip;
 			std::string m_gradedIp{ "" };
 			std::uint_least16_t m_port;
+			static inline std::atomic<std::uint64_t> s_nextCorrId{ 0 };
+			std::uint64_t m_corrId{ ++s_nextCorrId };   // ties the security events of one connection together
 			std::vector<std::uint8_t> m_sendBuf{};
 			std::vector<std::uint8_t> m_stageBuf{};
 			bool m_writing{ false };
@@ -211,6 +214,7 @@ namespace Common
 			}
 
 			const std::string& getIp() const noexcept { return m_ip; }
+			std::string corrId() const { return "c" + std::to_string(m_corrId); }
 			void setGradedIp(const std::string& ip) { m_gradedIp = ip; }
 			void setIpFromGraded() { m_ip = m_gradedIp; }
 			const std::uint_least16_t getPort() const noexcept { return m_port; }
