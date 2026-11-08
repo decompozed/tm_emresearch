@@ -58,7 +58,8 @@ jobs:
           cppcheck --version
           cppcheck -j "$(nproc)" --quiet --language=c++ --std=c++20 --enable=warning \
             --suppress=missingInclude --suppress=unmatchedSuppression --inline-suppr \
-            -I Common/include --xml --output-file=cppcheck.xml AuthServer Common MainServer CastServer
+            -I Common/include -I Common -I AuthServer/include -I MainServer/include -I CastServer/include \
+            --xml --output-file=cppcheck.xml AuthServer Common MainServer CastServer
 
       - name: Summarise the findings
         run: |
