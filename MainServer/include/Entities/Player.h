@@ -50,8 +50,6 @@ namespace Main
 			std::string latestWeeklyRewardDay{};
 			std::string latestMonthlyRewardDay{};
 			std::uint32_t totalWrongPasswordReset{};
-			std::uint32_t totalWrong2FaUsernameChange{};
-			std::uint32_t totalWrongUsernameChange{};
 			std::uint32_t totalWrong2FaReset{};
 			std::string pendingTwoFaSecret{}; // /twofa setup: kept only in memory until the first code confirms it
 			std::time_t pendingTwoFaSince{};

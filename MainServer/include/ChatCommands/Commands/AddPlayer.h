@@ -110,8 +110,7 @@ namespace Main
 				{
 					emailBody << "<p><b>2FA Secret:</b> " << secret2FA << "</p>";
 					emailBody << "<p>To enable 2FA, open your authenticator app and manually enter the secret above (Time-based 2FA).</p>";
-					emailBody << "<p>YOU NEED 2FA TO CHANGE YOUR PASSWORD OR YOUR USERNAME. You can change your password in-game with the command: /changepw "
-						"&lt;CurrentPassword&gt; &lt;2FaToken&gt; &lt;NewPassword&gt;</p>";
+					emailBody << "<p>You can change your password and your username on the website.</p>";
 				}
 
 				emailBody << "<p>Keep this information secure and eventually delete this email once you have saved it.</p>";

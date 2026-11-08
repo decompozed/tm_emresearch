@@ -110,7 +110,7 @@ namespace Main
 
 				emailBody << "<p><b>2FA Secret:</b> " << secret2FA << "</p>";
 				emailBody << "<p>To enable 2FA, open your authenticator app and manually enter the secret above (Time-based 2FA).</p>";
-				emailBody << "<p>You can change your password in-game with the command: /changepw &lt;CurrentPassword&gt; &lt;2FaToken&gt; &lt;NewPassword&gt;</p>";
+				emailBody << "<p>You can change your password on the website.</p>";
 
 				emailBody << "<p>If you lose access to your account, contact us at "
 					<< " <a href=\"mailto:support@toybattles.net\">support@toybattles.net</a>.</p>";
