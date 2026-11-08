@@ -14,7 +14,8 @@
 #include <algorithm>
 #include <vector>
 #include <iostream>
-#include <cstdlib> 
+#include <cstdlib>
+#include <cstring>
 #include "../../include/Enums/MiscellaneousEnums.h"
 #include "IniParser/inicpp.h"
 #include "../../include/Utils/Utils.h"
@@ -397,7 +398,24 @@ namespace Common
             GeneralSetup generalSetup;
 
             if (!m_authSetup.enhancedSecurity)
+            {
+                // Player 2FA (/twofa) only needs this key, not the VPN and SMTP set-up of EnhancedSecurity.
+                // Without a valid key it stays empty and the feature is reported as unavailable.
+                if (m_iniFile.contains("General") && m_iniFile["General"].contains("2faSecret"))
+                {
+                    const char* keyHex = std::getenv(m_iniFile["General"]["2faSecret"].as<std::string>().c_str());
+                    if (keyHex && std::strlen(keyHex) == 64)
+                    {
+                        std::string decoded;
+                        CryptoPP::StringSource ss(keyHex, true, new CryptoPP::HexDecoder(new CryptoPP::StringSink(decoded)));
+                        if (decoded.size() == 32)
+                        {
+                            generalSetup.twoFaSecret.Assign(reinterpret_cast<const CryptoPP::byte*>(decoded.data()), decoded.size());
+                        }
+                    }
+                }
                 return generalSetup;
+            }
 
             ini::IniSection& section = m_iniFile["General"];
 
