@@ -28,17 +28,22 @@ namespace Auth
 
 	bool AuthService::validatePassword(const std::string& plain, std::string hash)
 	{
-		if (BCrypt::validatePassword(plain, hash))
-			return true;
+		return Common::Utils::verifyPassword(plain, hash);
+	}
 
-		if (hash.substr(0, 4) == "$2b$")
+	void AuthService::upgradePasswordHash(std::uint32_t accountId, const std::string& storedHash, const std::string& plainPw)
+	{
+		if (!Common::Utils::passwordNeedsUpgrade(storedHash))
 		{
-			std::string hash_2a = hash;
-			hash_2a[2] = 'a';
-			return BCrypt::validatePassword(plain, hash_2a);
+			return;
 		}
 
-		return false;
+		if (!m_persistentDatabase.replacePasswordHash(accountId, storedHash, Common::Utils::hashPassword(plainPw)))
+		{
+			m_persistentDatabase.logGameEvent("AuthPasswordUpgrade", "Could not upgrade the password hash of account " + std::to_string(accountId), "MEDIUM");
+			return;
+		}
+		m_persistentDatabase.logGameEvent("AuthPasswordUpgrade", "Password hash upgraded for account " + std::to_string(accountId), "LOW");
 	}
 
 	Auth::Enums::Login AuthService::authorizeGraded(const Auth::Structures::BasicAccountInfo& ainfo, const std::optional<std::string>& token,
@@ -438,6 +443,8 @@ namespace Auth
 			m_persistentDatabase.addHash(userInfo.ainfoClient.accountId, 0); // AccountKey=0 signals failure to MainServer
 			return std::unexpected(authResult);
 		}
+
+		upgradePasswordHash(userInfo.ainfoClient.accountId, userInfo.hashedPassword, password);
 
 		userInfo.ainfoClient.hashKey = generateAccountKey();
 		m_persistentDatabase.addHash(userInfo.ainfoClient.accountId, userInfo.ainfoClient.hashKey);

@@ -46,6 +46,7 @@ namespace Auth
 		SecondFactor verifyRecoveryCode(std::uint32_t accountId, const std::string& code);
 
 		bool validatePassword(const std::string& plain, std::string hash);
+		void upgradePasswordHash(std::uint32_t accountId, const std::string& storedHash, const std::string& plainPw);
 	};
 }
 

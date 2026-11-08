@@ -209,6 +209,24 @@ namespace Auth
 			}
 		}
 
+		// Only replaces the exact hash that was verified, so a password changed in the meantime is never overwritten
+		bool PersistentDatabase::replacePasswordHash(std::uint32_t accountId, const std::string& oldHash, const std::string& newHash)
+		{
+			try
+			{
+				std::unique_ptr<sql::PreparedStatement> stmt(con->prepareStatement("UPDATE Users SET Password = ? WHERE AccountID = ? AND Password = ?"));
+				stmt->setString(1, newHash);
+				stmt->setUInt(2, accountId);
+				stmt->setString(3, oldHash);
+				return stmt->executeUpdate() > 0;
+			}
+			catch (const sql::SQLException& e)
+			{
+				::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), ::Utils::LogType::Error, "PersistentDatabase::replacePasswordHash");
+				return false;
+			}
+		}
+
 		// The WHERE clause makes this atomic: of two logins with the same code, only one can move the step forward
 		bool PersistentDatabase::consumeTotpStep(std::uint32_t accountId, std::uint64_t step)
 		{

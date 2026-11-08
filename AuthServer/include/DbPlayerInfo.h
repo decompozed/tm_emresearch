@@ -41,6 +41,7 @@ namespace Auth
 			bool updateCurrentHwid(std::uint32_t accountId, const std::string& hash, const std::string& salt);
 
 			bool consumeTotpStep(std::uint32_t accountId, std::uint64_t step);
+			bool replacePasswordHash(std::uint32_t accountId, const std::string& oldHash, const std::string& newHash);
 			std::optional<std::uint32_t> incrementFailedPasswords(std::uint32_t accountId);
 			std::optional<std::uint32_t> incrementFailed2fas(std::uint32_t accountId);
 			void resetFailedLogins(std::uint32_t accountId);
