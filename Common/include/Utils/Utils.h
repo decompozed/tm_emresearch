@@ -257,20 +257,28 @@ namespace Common
 		{
 			const std::string PREFIX = "2fa:gcm:v1:";
 
+			// Fail closed: a value that is not encrypted, or a damaged one, is never used as a secret
 			if (stored.rfind(PREFIX, 0) != 0)
-				return stored;
+				return std::nullopt;
 
-			std::string jsonStr;
-			StringSource ss(stored.substr(PREFIX.size()), true, new Base64Decoder(new StringSink(jsonStr)));
+			try
+			{
+				std::string jsonStr;
+				StringSource ss(stored.substr(PREFIX.size()), true, new Base64Decoder(new StringSink(jsonStr)));
 
-			json::value jv = json::parse(jsonStr);
-			json::object obj = jv.as_object();
+				json::value jv = json::parse(jsonStr);
+				json::object obj = jv.as_object();
 
-			std::vector<byte> iv = hexDecode(obj["iv"].as_string().c_str());
-			std::vector<byte> tag = hexDecode(obj["tag"].as_string().c_str());
-			std::vector<byte> ct = hexDecode(obj["ct"].as_string().c_str());
+				std::vector<byte> iv = hexDecode(obj["iv"].as_string().c_str());
+				std::vector<byte> tag = hexDecode(obj["tag"].as_string().c_str());
+				std::vector<byte> ct = hexDecode(obj["ct"].as_string().c_str());
 
-			return decryptAESGCM(key, iv, tag, ct); 
+				return decryptAESGCM(key, iv, tag, ct);
+			}
+			catch (const std::exception&)
+			{
+				return std::nullopt;
+			}
 		}
 
 		inline std::optional<std::string> encrypt2FASecret(const std::string& secret, const SecByteBlock& key)
