@@ -163,8 +163,8 @@ Needs `TM_ENHANCED_SECURITY=true` (the default) and the mail settings in `tm.env
 
 All three servers write to `/srv/toymayhem/logs` on the host (`TB_LOG_DIR`):
 
-* `AuthServer.log`, `MainServer.log`, `CastServer.log` (rotated at 50 MB, 10 files)
-* `security/<server>-YYYY-MM-DD.log` JSON lines, one security event per line
+* `Auth.log`, `Main.log`, `Cast.log` (rotated at 50 MB, 10 files)
+* `security/<Server>-YYYY-MM-DD.log` JSON lines, one security event per line
 * `modes/` party game logs, `crash-<server>-<pid>.txt` after a crash
 
 The folder belongs to the group `blueteam` (mode 2750, read only for them). Add a Blue student:
@@ -240,7 +240,16 @@ round trip with a throwaway key on every run, but not against R2 and your real k
 
 ## What was and was not tested
 
-See the pipeline summary of the run on branch `deploy/containers-2` for what ran (image build, compose start with the real
-image, ports, restart, backup and restore round trip, shellcheck, bootstrap dry run). Not testable without the VPS: the real bootstrap
-(`--apply`), Cloudflare Access SSH, the tunnels, R2 upload, the deploy workflow, the external port scan, behaviour under load,
-and whether the memory and CPU limits are the right size (they are guesses).
+Tested in the pipeline (branch `deploy/containers-7`, run 42805825144, all jobs green, publish job skipped because it is not main):
+the image builds from the pinned vcpkg baseline; the compose file starts `db`, `netns`, `auth`, `main`, `cast` from that image and all are healthy;
+the three game ports answer on the host, 13001 does not answer on 127.0.0.1 but does on the container address; the database has no published port and `mvapp`
+is refused `CREATE DATABASE`; the servers write `Auth.log`, `Main.log`, `Cast.log` and the JSON security log; restarting `main` brings it back healthy;
+an encrypted dump with a throwaway key contains no readable table names and restores a deleted table; shellcheck and the bootstrap dry run on Ubuntu 24.04.
+
+Not testable without the VPS: the real bootstrap (`--apply`), Cloudflare Access SSH, both tunnels, the R2 upload and retention, the deploy workflow,
+the external port scan, behaviour under load, and whether the memory and CPU limits are the right size (they are guesses).
+Also not checked: a plain `GET /` on port 8080 inside the container got "connection reset", so try a real API path through the tunnel
+(`curl https://api.<domain>/...`) after the first deploy.
+
+Two things the schema needed that are easy to forget: MariaDB runs with `lower-case-table-names=1` (the code asks for `Users`, the dump creates `users`),
+and `db-init/10-schema.sh` loads the dump, because the dump file lost its header lines and would otherwise stop with a TIME_ZONE error.
