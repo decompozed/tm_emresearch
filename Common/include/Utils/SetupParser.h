@@ -67,6 +67,8 @@ namespace Common
             std::string jwtToken;
             std::string jwtTokenPrevious; // optional, only accepted when verifying (rotation overlap)
             std::vector<std::string> allowedOrigins;
+            std::vector<std::string> trustedProxies; // [Website] TrustedProxy: peers whose CF-Connecting-IP header is believed (127.0.0.1 always is)
+            std::string turnstileSecret;             // empty: the Cloudflare Turnstile check of the account API is skipped
         };
 
         struct ClientSetup

@@ -298,6 +298,17 @@ namespace Common
                 return false;
             }
 
+            // Optional: the name of the variable (or NAME_FILE) that holds the Cloudflare Turnstile secret of the account API
+            if (website.contains("TurnstileSecret") && !website["TurnstileSecret"].as<std::string>().empty())
+            {
+                const SecretSource::Result turnstile = SecretSource::read(website["TurnstileSecret"].as<std::string>());
+                if (turnstile.origin == SecretSource::Origin::Error)
+                {
+                    ::Utils::Logger::log(turnstile.error, ::Utils::LogType::Error, "SetupParser::checkWebsiteConfig");
+                    return false;
+                }
+            }
+
             return true;
         }
 
@@ -860,6 +871,29 @@ namespace Common
                 origin = trim(origin);
                 if (!origin.empty())
                     website.allowedOrigins.push_back(origin);
+            }
+
+            website.trustedProxies.clear();
+            if (section.contains("TrustedProxy"))
+            {
+                std::stringstream proxies(section["TrustedProxy"].as<std::string>());
+                std::string proxy;
+                while (std::getline(proxies, proxy, ','))
+                {
+                    proxy = trim(proxy);
+                    if (!proxy.empty())
+                        website.trustedProxies.push_back(proxy);
+                }
+            }
+
+            if (section.contains("TurnstileSecret") && !section["TurnstileSecret"].as<std::string>().empty())
+            {
+                website.turnstileSecret = readSecretOrStop(section["TurnstileSecret"].as<std::string>(), "SetupParser::getWebsiteSetupImpl").value_or("");
+            }
+            if (website.turnstileSecret.empty())
+            {
+                ::Utils::Logger::log("[Website] TurnstileSecret is not configured: the captcha check of POST /account/register is SKIPPED (local tests only)",
+                    ::Utils::LogType::Warning, "SetupParser::getWebsiteSetupImpl");
             }
 
             return website;
