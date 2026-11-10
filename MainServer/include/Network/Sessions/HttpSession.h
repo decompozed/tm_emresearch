@@ -11,6 +11,9 @@
 #include <cstring>
 #include <string>
 #include <optional>
+#include "Utils/AccountApi.h"
+#include "Utils/WebToken.h"
+#include "Structures/AccountInfo/WebAccount.h"
 
 namespace Main
 {
@@ -27,6 +30,7 @@ namespace Main
             explicit HttpSession(tcp::socket&& socket, Main::Network::SessionsManager& sm, Main::Classes::RoomsManager& rm,
                 Main::Persistence::MainScheduler& ms)
                 : m_socket(std::move(socket))
+                , m_peerIp{ peerAddress(m_socket) }
                 , m_sessionsManager{ sm }
                 , m_roomsManager{ rm }
                 , m_scheduler{ ms }
@@ -36,9 +40,18 @@ namespace Main
             void start() { readRequest(); }
 
         private:
+            static std::string peerAddress(boost::beast::tcp_stream& stream)
+            {
+                boost::system::error_code ec;
+                const auto endpoint = stream.socket().remote_endpoint(ec);
+                return ec ? std::string{} : endpoint.address().to_string();
+            }
+
             boost::beast::tcp_stream m_socket;
             boost::beast::flat_buffer m_buffer;
             http::request<http::string_body> m_request;
+            std::string m_peerIp;          // the TCP peer: the tunnel in production, see clientIp()
+            bool m_jsonResponse{ false };  // the account API answers application/json, the staff endpoints text/plain
             Main::Network::SessionsManager& m_sessionsManager;
             Main::Classes::RoomsManager& m_roomsManager;
             Main::Persistence::MainScheduler& m_scheduler;
@@ -51,6 +64,22 @@ namespace Main
             void handleRequest();
             void sendResponse(const std::string& body, http::status statusCode);
             bool isOriginOk(const std::string& origin);
+
+            // The website's account API (HttpSession_Account.cpp)
+            enum class SecondFactor { Valid, Missing, Invalid, Replayed, Locked };
+            bool handleAccountRequest(std::string& responseBody, http::status& statusCode);
+            void handleAccountStatus(std::string& responseBody, http::status& statusCode);
+            void handleAccountRegister(std::string& responseBody, http::status& statusCode);
+            void handleAccountLogin(std::string& responseBody, http::status& statusCode);
+            void handleAccountMe(std::string& responseBody, http::status& statusCode);
+            void handleAccountPassword(std::string& responseBody, http::status& statusCode);
+            std::string clientIp() const;
+            void apiError(std::string& responseBody, http::status& statusCode, http::status status, const char* code);
+            void apiEvent(const char* event, const char* severity, std::uint32_t accountId, const char* result, const std::string& reason);
+            bool apiRateLimited(Common::Utils::AccountApi::RateLimiter& limiter, const char* endpoint, std::string& responseBody, http::status& statusCode);
+            bool apiParseObject(boost::json::object& out);
+            std::optional<Common::Utils::WebToken::Claims> apiBearer();
+            SecondFactor apiCheckSecondFactor(const Main::Structures::WebAccount& account, const std::string& rawCode);
             void handleBanCommand(std::string& responseBody, http::status& statusCode, const http::request<http::string_body>& m_request);
             void handleMute(std::string& responseBody, http::status& statusCode, const http::request<http::string_body>& m_request);
             void handleAnnounceCommand(std::string& responseBody, http::status& statusCode, const http::request<http::string_body>& m_request, bool isTip);

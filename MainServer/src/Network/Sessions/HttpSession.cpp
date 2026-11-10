@@ -12,6 +12,8 @@
 #include "Network/Sessions/HttpSession.h"
 #include "Detail/CdbUtils.h"
 #include "Utils/JwtKeys.h"
+#include "Utils/WebToken.h"
+#include "Utils/SecurityEvent.h"
 
 #include <charconv>
 #include <algorithm>
@@ -28,6 +30,12 @@ namespace Main
                 auto decoded_token = jwt::decode(token);
                 const auto& website = Common::Utils::SetupParser::getInstance().getWebsiteSetup();
                 Common::Utils::JwtKeys::verifyHs256(decoded_token, website.jwtToken, website.jwtTokenPrevious);
+                if (!Common::Utils::WebToken::staffTokenAllowed(decoded_token))
+                {
+                    // Signed with our key, but issued to the website: whatever role it carries, it is not a staff token
+                    Common::Utils::SecurityEvent::emit("authz_denied", "HIGH", 0, m_peerIp, "denied", "website token used on a staff endpoint");
+                    return false;
+                }
                 auto grade_claim = decoded_token.get_payload_claim("role");
                 int grade = grade_claim.as_integer();
                 if (grade < requiredGrade)
@@ -116,13 +124,36 @@ namespace Main
 
         void HttpSession::readRequest()
         {
+            // A client that sends nothing, or one byte a minute, must not hold the server: every read and write has a deadline
+            m_socket.expires_after(std::chrono::seconds(10));
             try {
-               boost::beast::http::read(m_socket, m_buffer, m_request);
+               http::request_parser<http::string_body> parser;
+               parser.header_limit(8 * 1024);
+               boost::beast::http::read_header(m_socket, m_buffer, parser);
+               // The account API takes at most 4 KiB of body; the staff endpoints keep the 1 MiB default of the parser
+               const std::string_view target = parser.get().target();
+               parser.body_limit(target.starts_with("/account/") ? Common::Utils::AccountApi::maxBodyBytes : std::uint64_t{ 1024 * 1024 });
+               boost::beast::http::read(m_socket, m_buffer, parser);
+               m_request = parser.release();
+            } catch(const boost::system::system_error& e) {
+               if (e.code() == http::error::body_limit)
+               {
+                  m_jsonResponse = true;
+                  sendResponse("{\"error\":\"payload_too_large\"}", http::status::payload_too_large);
+                  m_socket.close();
+                  return;
+               }
+               std::cerr << "Invalid HTTP request!" << std::endl;
+               return;
             } catch(...) {
                std::cerr << "Invalid HTTP request!" << std::endl;
                return;
             }
-            handleRequest();
+            try {
+               handleRequest();
+            } catch(const std::exception& e) {
+               Utils::Logger::log(std::string("Unhandled error in HttpSession: ") + e.what(), Utils::LogType::Error, "HttpSession::readRequest");
+            }
             m_socket.close();
         }
 
@@ -131,7 +162,16 @@ namespace Main
             std::string responseBody;
             http::status statusCode = http::status::ok;
 
-            if (m_request.method() == http::verb::post)
+            if (m_request.method() == http::verb::options)
+            {
+                // CORS preflight: no body, the headers are added in sendResponse for allowed origins only
+                statusCode = http::status::no_content;
+            }
+            else if (handleAccountRequest(responseBody, statusCode))
+            {
+                // answered by the account API
+            }
+            else if (m_request.method() == http::verb::post)
             {
                 if (m_request.target() == "/ban")
                 {
@@ -232,41 +272,33 @@ namespace Main
         {
             http::response<http::string_body> response{ statusCode, m_request.version() };
 
-            response.set(http::field::content_type, "text/plain");
+            response.set(http::field::content_type, m_jsonResponse ? "application/json" : "text/plain");
+            response.set(http::field::cache_control, "no-store");
+            response.set("X-Content-Type-Options", "nosniff");
             response.body() = body;
             response.prepare_payload();
 
-            std::string origin = m_request[http::field::origin];
-
-            if (m_request.method() == http::verb::options)
+            // Only an origin listed in [Website] AllowedOrigins gets the headers, and it gets its own value back (never "*", no credentials)
+            const std::string origin = std::string(m_request[http::field::origin]);
+            response.set(http::field::vary, "Origin");
+            if (isOriginOk(origin))
             {
                 response.set(http::field::access_control_allow_origin, origin);
-                response.set(http::field::access_control_allow_credentials, "true");
-                response.set(http::field::access_control_allow_methods, "GET, POST, PUT, DELETE, OPTIONS");
-                response.set(http::field::access_control_allow_headers, "Origin, X-Requested-With, Content-Type, Accept, Authorization, Access-Control-Allow-Origin");
-                response.set(http::field::access_control_max_age, "86400");
-            }
-            else
-            {
-                response.set(http::field::access_control_allow_origin, origin);
-                response.set(http::field::access_control_allow_credentials, "true");
-                response.set(http::field::access_control_allow_methods, "GET, POST, PUT, DELETE, OPTIONS");
-                response.set(http::field::access_control_allow_headers, "Origin, X-Requested-With, Content-Type, Accept, Authorization");
+                response.set(http::field::access_control_allow_methods, "GET, POST, OPTIONS");
+                response.set(http::field::access_control_allow_headers, "Content-Type, Authorization");
+                if (m_request.method() == http::verb::options)
+                {
+                    response.set(http::field::access_control_max_age, "600");
+                }
             }
 
+            m_socket.expires_after(std::chrono::seconds(10));
             http::write(m_socket, response);
         }
 
         bool HttpSession::isOriginOk(const std::string& origin)
         {
-            auto allowedOrigins = Common::Utils::SetupParser::getInstance().getWebsiteSetup().allowedOrigins;
-
-            std::string normalizedOrigin = origin;
-            if (normalizedOrigin.back() == '/') {
-                normalizedOrigin.pop_back();
-            }
-
-            return std::find(allowedOrigins.begin(), allowedOrigins.end(), normalizedOrigin) != allowedOrigins.end();
+            return Common::Utils::AccountApi::originAllowed(origin, Common::Utils::SetupParser::getInstance().getWebsiteSetup().allowedOrigins);
         }
 
         /*

@@ -622,7 +622,8 @@ namespace Main
 				if (!error)
 				{
 					auto remoteIp = m_httpSocket->remote_endpoint().address().to_string();
-					if (remoteIp == websiteIp)
+					const auto& proxies = Common::Utils::SetupParser::getInstance().getWebsiteSetup().trustedProxies;
+					if (remoteIp == websiteIp || std::find(proxies.begin(), proxies.end(), remoteIp) != proxies.end())
 					{
 						auto session = std::make_shared<Main::Network::HttpSession>(
 							std::move(*m_httpSocket), m_sessionsManager, m_roomsManager, m_scheduler);
