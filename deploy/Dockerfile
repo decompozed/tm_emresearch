@@ -12,7 +12,7 @@ FROM scratch AS vcpkg-seed
 FROM ubuntu:24.04 AS builder
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
-        gcc-14 g++-14 cmake ninja-build git curl zip unzip tar pkg-config python3 \
+        build-essential gcc-14 g++-14 cmake ninja-build git curl zip unzip tar pkg-config python3 \
         autoconf automake autoconf-archive libtool bison flex ca-certificates binutils \
     && rm -rf /var/lib/apt/lists/*
 ENV CC=gcc-14 CXX=g++-14 VCPKG_DISABLE_METRICS=1 VCPKG_ROOT=/opt/vcpkg
