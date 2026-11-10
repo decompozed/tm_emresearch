@@ -43,6 +43,10 @@ x-game: &game
     TM_ALLOWED_ORIGINS: ${TM_ALLOWED_ORIGINS:-https://www.${TM_DOMAIN:?set TM_DOMAIN in tm.env},https://${TM_DOMAIN}}
     TM_ENHANCED_SECURITY: ${TM_ENHANCED_SECURITY:-true}
     TM_CLIENT_VERSION: ${TM_CLIENT_VERSION:-0.0.3}
+    TM_TURNSTILE: ${TM_TURNSTILE:-on}
+    TM_REGISTER_LIMIT_PER_HOUR: ${TM_REGISTER_LIMIT_PER_HOUR:-5}
+    TM_LOGIN_LIMIT_PER_15MIN: ${TM_LOGIN_LIMIT_PER_15MIN:-10}
+    TM_PASSWORD_LIMIT_PER_15MIN: ${TM_PASSWORD_LIMIT_PER_15MIN:-5}
     TM_SMTP_SERVER: ${TM_SMTP_SERVER:-smtp://smtp.${TM_DOMAIN}:587}
     TM_EMAIL_SENDER: ${TM_EMAIL_SENDER:-toymayhem@${TM_DOMAIN}}
     TM_EMAIL_USERNAME: ${TM_EMAIL_USERNAME:-toymayhem@${TM_DOMAIN}}
@@ -56,6 +60,7 @@ x-game: &game
     MVEMAIL_SECRET_FILE: /run/secrets/email_secret
     MV2FA_SECRET_FILE: /run/secrets/twofa_secret
     MV_EMAIL_TOKEN_FILE: /run/secrets/email_token
+    MV_TURNSTILE_FILE: /run/secrets/turnstile_secret   # only MainServer reads it
   secrets:
     - db_app_password
     - jwt_secret
@@ -64,6 +69,7 @@ x-game: &game
     - email_secret
     - twofa_secret
     - email_token
+    - turnstile_secret
 
 services:
   db:
@@ -169,7 +175,8 @@ services:
       start_period: 40s
 
   # Carries the account API (MainServer, port 8080) to Cloudflare. Add the public hostname in the settings of the tunnel
-  # in the Cloudflare dashboard: api.<TM_DOMAIN> -> http://172.28.0.10:8080 (the value of TM_APP_IP).
+  # in the Cloudflare dashboard: api.<TM_DOMAIN>, path ^/account/, -> http://172.28.0.10:8080 (the value of TM_APP_IP).
+  # The path matters: the same listener serves the staff commands (/ban, /announce, ...), which must stay off the internet.
   cloudflared:
     image: cloudflare/cloudflared:2026.10.7
     restart: unless-stopped
@@ -224,5 +231,7 @@ secrets:
     file: ${TM_SECRETS_DIR:-./secrets}/twofa_secret
   email_token:
     file: ${TM_SECRETS_DIR:-./secrets}/email_token
+  turnstile_secret:
+    file: ${TM_SECRETS_DIR:-./secrets}/turnstile_secret
   cf_tunnel_token:
     file: ${TM_SECRETS_DIR:-./secrets}/cf_tunnel_token

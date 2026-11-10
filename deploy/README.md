@@ -56,32 +56,36 @@ another machine (`nmap -Pn -p- <vps-ip>`) and compare with that list.
 Cloudflare (dashboard, free plan is enough):
 
 1. **Domain** on Cloudflare DNS (nameservers pointed to Cloudflare).
-2. **Tunnel `tm-api`** (Zero Trust, Networks, Tunnels, create, Cloudflared). Public hostname `api.<domain>` -> service `HTTP`
-   `172.28.0.10:8080`. Copy the **tunnel token**.
+2. **Tunnel `tm-api`** (Zero Trust, Networks, Tunnels, create, Cloudflared). Public hostname `api.<domain>`, **path `^/account/`**,
+   -> service `HTTP` `172.28.0.10:8080`. Copy the **tunnel token**. The path is important: the same listener also serves the staff
+   commands (`/ban`, `/announce`, ...), and with the path set the tunnel answers 404 for them instead of passing them on.
 3. **Tunnel `tm-ssh`**. Public hostname `ssh.<domain>` -> service `SSH` `localhost:22`. Copy its **token** too.
 4. **Access application** (Zero Trust, Access, Applications, Self-hosted) for `ssh.<domain>`. Policy 1: Allow, the e-mail addresses of
    the admins. Policy 2: Service Auth, for the CI token (next point). Without this application the SSH tunnel would be open to anyone.
 5. **Service token** (Access, Service Auth, Create). Keep **Client ID** and **Client Secret** for GitHub.
 6. **DNS records**: `A play.<domain>` (or one name per server) -> VPS IP, **DNS only**. The tunnel hostnames `api` and `ssh` are
    created for you. `www` and the apex belong to Cloudflare Pages (the website worker).
-7. **R2 bucket** `toymayhem-backups`. Create an **API token** (Object Read and Write, only this bucket); note the **Account ID**, **Access Key ID**,
+7. **Turnstile widget** (Turnstile, Add widget) for the hostnames `<domain>` and `www.<domain>`, mode Managed. The **site key** goes into
+   the website (`js/config.js` of tm_website), the **secret key** into the secret file `turnstile_secret` (below). MainServer does not
+   start while that file still holds the placeholder, so registration can never be open without the captcha by mistake.
+8. **R2 bucket** `toymayhem-backups`. Create an **API token** (Object Read and Write, only this bucket); note the **Account ID**, **Access Key ID**,
    **Secret Access Key**. Optional but good: a bucket lock rule (retention 14 days), so a hacked VPS cannot delete the backups.
 
 On your own machine:
 
-8. **Admin SSH key**: `ssh-keygen -t ed25519 -f ~/.ssh/tm_admin`. The public key goes to the bootstrap script.
-9. **CI SSH key**: `ssh-keygen -t ed25519 -f tm_ci -N ""`. Public key to the bootstrap script, private key to GitHub.
-10. **Backup key pair** (GnuPG): `gpg --quick-generate-key "ToyMayhem backup" rsa4096 encrypt 2y`, then
+9. **Admin SSH key**: `ssh-keygen -t ed25519 -f ~/.ssh/tm_admin`. The public key goes to the bootstrap script.
+10. **CI SSH key**: `ssh-keygen -t ed25519 -f tm_ci -N ""`. Public key to the bootstrap script, private key to GitHub.
+11. **Backup key pair** (GnuPG): `gpg --quick-generate-key "ToyMayhem backup" rsa4096 encrypt 2y`, then
     `gpg --export --armor <fingerprint> > backup-public.asc`. Keep the private key offline (and a backup of it); losing it means
     the backups cannot be read.
 
 GitHub (repository MacroVolts/tm_emulator):
 
-11. **Package visibility**: after the first push of the image, make the package `tm_emulator` public, or the VPS needs `docker login ghcr.io`
+12. **Package visibility**: after the first push of the image, make the package `tm_emulator` public, or the VPS needs `docker login ghcr.io`
     with a read-only token.
-12. **Environment** `production` with required reviewers (the deploy job uses it).
-13. **Variables**: `DEPLOY_ENABLED=true` (this switches the deploy workflow on, until then it is skipped), `DEPLOY_SSH_HOST=ssh.<domain>`, `DEPLOY_USER=deploy`.
-14. **Secrets**: `CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET`, `DEPLOY_SSH_KEY` (private CI key), `DEPLOY_SSH_KNOWN_HOSTS`
+13. **Environment** `production` with required reviewers (the deploy job uses it).
+14. **Variables**: `DEPLOY_ENABLED=true` (this switches the deploy workflow on, until then it is skipped), `DEPLOY_SSH_HOST=ssh.<domain>`, `DEPLOY_USER=deploy`.
+15. **Secrets**: `CF_ACCESS_CLIENT_ID`, `CF_ACCESS_CLIENT_SECRET`, `DEPLOY_SSH_KEY` (private CI key), `DEPLOY_SSH_KNOWN_HOSTS`
     (output of `ssh-keyscan -t ed25519 localhost` run on the VPS, with `localhost` replaced by `ssh.<domain>`).
 
 The image itself needs no secrets: the workflow pushes to ghcr.io with the built-in `GITHUB_TOKEN`.
@@ -101,8 +105,10 @@ sudo deploy/host/bootstrap-host.sh --apply --admin-pubkey-file tm_admin.pub --ci
 sudo nano /opt/toymayhem/tm.env                                         # TM_DOMAIN, TM_IMAGE (the sha- tag you want)
 sudo install -m 0600 /dev/stdin /etc/toymayhem/cloudflared-ssh.token    # paste the tm-ssh token, then Ctrl-D
 printf '%s' 'THE-TM-API-TOKEN' | sudo tee /tmp/cf.token > /dev/null
-sudo deploy/scripts/make-secrets.sh --cf-tunnel-token-file /tmp/cf.token --email-token-file mail-password.txt
-sudo shred -u /tmp/cf.token
+printf '%s' 'THE-TURNSTILE-SECRET-KEY' | sudo tee /tmp/ts.key > /dev/null
+sudo deploy/scripts/make-secrets.sh --cf-tunnel-token-file /tmp/cf.token --turnstile-secret-file /tmp/ts.key --email-token-file mail-password.txt
+sudo shred -u /tmp/cf.token /tmp/ts.key
+# for the hacking week, where many players share one school address: TM_REGISTER_LIMIT_PER_HOUR=60 in tm.env
 
 # 4. start the SSH tunnel and prove Access SSH works from your laptop (next section) BEFORE closing port 22
 sudo systemctl enable --now cloudflared-ssh.service
@@ -191,6 +197,7 @@ Secrets are files in `/opt/toymayhem/secrets`. Always: make the new value, then 
 | `db_root_password` | `ALTER USER root@localhost IDENTIFIED BY '...'` inside the DB, then rotate the file. Only needed for admin work. |
 | `email_token` | `make-secrets.sh --email-token-file new.txt --rotate email_token`, recreate `auth main cast`. |
 | `cf_tunnel_token` | in the dashboard, refresh the tunnel token, `make-secrets.sh --cf-tunnel-token-file new.txt --rotate cf_tunnel_token`, `docker compose up -d --force-recreate cloudflared`. |
+| `turnstile_secret` | in the dashboard, rotate the secret key of the widget, `make-secrets.sh --turnstile-secret-file new.txt --rotate turnstile_secret`, recreate `main`. |
 | `email_secret`, `twofa_secret` | change what they protect (stored e-mail addresses, 2FA seeds), so do not rotate during the event. |
 | GitHub secrets | change in the repository settings, nothing on the VPS. CI SSH key: replace the line in `/home/deploy/.ssh/authorized_keys`. |
 

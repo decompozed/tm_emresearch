@@ -23,6 +23,12 @@ db_user="${TM_DB_USER:-mvapp}"
 enhanced="${TM_ENHANCED_SECURITY:-true}"
 origins="${TM_ALLOWED_ORIGINS:?TM_ALLOWED_ORIGINS is not set}"
 client_version="${TM_CLIENT_VERSION:-0.0.3}"
+# The captcha of POST /account/register. "off" is only for the smoke test of the pipeline: without the secret the server
+# skips the check, so in production a missing secret must stop the start instead of silently opening registration.
+turnstile="${TM_TURNSTILE:-on}"
+register_limit="${TM_REGISTER_LIMIT_PER_HOUR:-5}"
+login_limit="${TM_LOGIN_LIMIT_PER_15MIN:-10}"
+password_limit="${TM_PASSWORD_LIMIT_PER_15MIN:-5}"
 
 for v in TM_APP_IP db_host db_port db_name db_user enhanced origins client_version \
          TM_SMTP_SERVER TM_EMAIL_SENDER TM_EMAIL_USERNAME TM_SECURITY_NOTIFY; do
@@ -34,6 +40,10 @@ for v in TM_APP_IP db_host db_port db_name db_user enhanced origins client_versi
     fi
 done
 case "$enhanced" in true|false) ;; *) echo "[entrypoint] TM_ENHANCED_SECURITY must be true or false" >&2; exit 64 ;; esac
+case "$turnstile" in on|off) ;; *) echo "[entrypoint] TM_TURNSTILE must be on or off" >&2; exit 64 ;; esac
+for v in register_limit login_limit password_limit; do
+    [[ "${!v}" =~ ^[1-9][0-9]{0,3}$ ]] || { echo "[entrypoint] $v must be a number from 1 to 9999" >&2; exit 64; }
+done
 
 # The server finds itself by the IP of the default route (Common/include/Utils/Utils.h getLocalIp). If the IP the
 # compose file promised is not on this container, stop with a clear message instead of a sanity check failure.
@@ -50,6 +60,24 @@ for f in MV_DB_PW_FILE MV_JWT_FILE MV_IPC_SECRET_FILE MV_PW_PEPPER_FILE; do
         exit 78
     fi
 done
+# MainServer encrypts the email address of accounts made on the website, so it needs the email key in every mode
+if [[ "$server" == MainServer ]]; then
+    path="${MVEMAIL_SECRET_FILE:-}"
+    if [[ -z "$path" || ! -f "$path" || ! -s "$path" ]]; then
+        echo "[entrypoint] MVEMAIL_SECRET_FILE is not set or does not point at a non-empty file (the account API needs it)" >&2
+        exit 78
+    fi
+fi
+website_turnstile=
+if [[ "$server" == MainServer && "$turnstile" == on ]]; then
+    path="${MV_TURNSTILE_FILE:-}"
+    if [[ -z "$path" || ! -f "$path" || ! -s "$path" ]] || grep -q '^paste-' "$path"; then
+        echo "[entrypoint] MV_TURNSTILE_FILE does not hold the Turnstile secret key; put it in the secret file turnstile_secret" >&2
+        echo "[entrypoint] (TM_TURNSTILE=off disables the captcha, for tests only)" >&2
+        exit 78
+    fi
+    website_turnstile="TurnstileSecret = MV_TURNSTILE"
+fi
 if [[ "$enhanced" == true ]]; then
     for f in MVEMAIL_SECRET_FILE MV2FA_SECRET_FILE MV_EMAIL_TOKEN_FILE; do
         path="${!f:-}"
@@ -104,6 +132,12 @@ Ip = ${TM_APP_IP}
 Port = 8080
 JwtTokenEnvironmentName = MV_JWT
 AllowedOrigins = ${origins}
+# cloudflared shares the network namespace, so the tunnel connects from TM_APP_IP. Only that peer may set CF-Connecting-IP.
+TrustedProxy = ${TM_APP_IP}
+${website_turnstile}
+RegisterLimitPerHour = ${register_limit}
+LoginLimitPer15Min = ${login_limit}
+PasswordLimitPer15Min = ${password_limit}
 
 [Ipc]
 SecretEnvironmentName = MV_IPC_SECRET
@@ -124,6 +158,6 @@ SecurityNotificationReceiver = ${TM_SECURITY_NOTIFY:-blue@example.invalid}
 INI
 
 mkdir -p "${TB_LOG_DIR:-/var/log/toymayhem}" 2>/dev/null || true
-echo "[entrypoint] $(date -u '+%F %T') config.ini written for ${server} (ip ${TM_APP_IP}, database ${db_user}@${db_host}:${db_port}/${db_name}, enhanced security ${enhanced})"
+echo "[entrypoint] $(date -u '+%F %T') config.ini written for ${server} (ip ${TM_APP_IP}, database ${db_user}@${db_host}:${db_port}/${db_name}, enhanced security ${enhanced}, captcha ${turnstile})"
 cd /app/emu/Output
 exec "./${server}.elf"

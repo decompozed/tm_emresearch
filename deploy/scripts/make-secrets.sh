@@ -2,7 +2,7 @@
 # Creates the secret files the compose file mounts under /run/secrets. Never overwrites a file that exists, so it is
 # safe to run again; use --rotate NAME to replace one on purpose (README.md says what else a rotation needs).
 #
-#   make-secrets.sh [--dir DIR] [--cf-tunnel-token-file FILE] [--email-token-file FILE] [--rotate NAME]...
+#   make-secrets.sh [--dir DIR] [--cf-tunnel-token-file FILE] [--email-token-file FILE] [--turnstile-secret-file FILE] [--rotate NAME]...
 #
 # A new directory (default /opt/toymayhem/secrets) is created with mode 0700. The files get mode 0444: the containers run
 # as other users (10001 game, 999 database, 65532 cloudflared) and Docker mounts the file as it is. Only root can enter
@@ -12,12 +12,14 @@ set -euo pipefail
 dir=/opt/toymayhem/secrets
 cf_token_file=
 email_token_file=
+turnstile_file=
 rotate=()
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --dir) dir=${2:?}; shift 2 ;;
         --cf-tunnel-token-file) cf_token_file=${2:?}; shift 2 ;;
         --email-token-file) email_token_file=${2:?}; shift 2 ;;
+        --turnstile-secret-file) turnstile_file=${2:?}; shift 2 ;;
         --rotate) rotate+=("${2:?}"); shift 2 ;;
         -h|--help) sed -n '2,10p' "$0"; exit 0 ;;
         *) echo "unknown option $1" >&2; exit 2 ;;
@@ -56,6 +58,9 @@ put twofa_secret     "$(hex)"        # 64 hex digits
 
 if [[ -n "$email_token_file" ]]; then put email_token "$(tr -d '\r\n' < "$email_token_file")"
 else [[ -s "$dir/email_token" ]] && echo "kept     email_token" || put email_token "not-configured-yet"; fi
+
+if [[ -n "$turnstile_file" ]]; then put turnstile_secret "$(tr -d '\r\n' < "$turnstile_file")"
+else [[ -s "$dir/turnstile_secret" ]] && echo "kept     turnstile_secret" || { put turnstile_secret "paste-the-turnstile-secret-key-here"; echo "NOTE: turnstile_secret is a placeholder; MainServer refuses to start until you put the real key in (Cloudflare, Turnstile, the widget of the site)"; }; fi
 
 if [[ -n "$cf_token_file" ]]; then put cf_tunnel_token "$(tr -d '\r\n' < "$cf_token_file")"
 else [[ -s "$dir/cf_tunnel_token" ]] && echo "kept     cf_tunnel_token" || { put cf_tunnel_token "paste-the-tunnel-token-here"; echo "NOTE: cf_tunnel_token is a placeholder; cloudflared will not connect until you put the real token in"; }; fi
