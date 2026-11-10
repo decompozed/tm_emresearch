@@ -372,7 +372,10 @@ jobs:
           mkdir -p "$work/logs"
           sudo chown 10001:10001 "$work/logs"
           export TM_DOMAIN=example.invalid TM_IMAGE="$IMAGE_LOCAL" TM_SECRETS_DIR="$work/secrets" TM_LOG_HOST_DIR="$work/logs" TM_SCHEMA_SQL="$PWD/microvolts-db.sql"
-          deploy/scripts/make-secrets.sh --dir "$TM_SECRETS_DIR" > /dev/null
+          # Cloudflare's test secret key passes every token, so registration goes through the real siteverify call over TLS
+          printf '1x0000000000000000000000000000000AA' > "$RUNNER_TEMP/turnstile-test-secret"
+          deploy/scripts/make-secrets.sh --dir "$TM_SECRETS_DIR" --turnstile-secret-file "$RUNNER_TEMP/turnstile-test-secret" > /dev/null
+          export TM_REGISTER_LIMIT_PER_HOUR=3
           cd deploy
           docker compose config --quiet
           if ! docker compose up --detach --wait --wait-timeout 420 db netns auth main cast; then
@@ -394,8 +397,40 @@ jobs:
             if (exec 3<>/dev/tcp/127.0.0.1/13001) 2>/dev/null; then echo "FAIL 13001 reachable"; exit 1; else echo "13001 refused on 127.0.0.1 (good)"; fi
             echo "== staff login 13001 from the host through the container address (the SSH tunnel path)"
             (exec 3<>/dev/tcp/172.28.0.10/13001) && echo "13001 reachable on 172.28.0.10 from the host"
-            echo "== account API on 8080 through the container address (what cloudflared connects to)"
-            curl -sS -m 10 -o /dev/null -w 'GET / -> HTTP %{http_code}\n' http://172.28.0.10:8080/ || true
+            echo "== account API: a peer that is not the tunnel (the host, 172.28.0.1) is dropped"
+            if curl -sS -m 10 http://172.28.0.10:8080/account/status; then echo "FAIL the host reached the API"; exit 1; else echo "dropped (good)"; fi
+            # cloudflared shares the namespace of netns, so a curl container in that namespace connects the way the tunnel does
+            api() { docker run --rm --network "container:$(docker compose ps -q netns)" curlimages/curl:8.11.1 -sS -m 20 "$@"; }
+            base=http://172.28.0.10:8080/account
+            body() { printf '{"username":"%s","nickname":"%s","password":"%s","email":"%s@example.invalid","turnstile":"XXXX.DUMMY.TOKEN.XXXX"}' "$1" "$1" "$2" "$1"; }
+            reg() { api -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' -H "CF-Connecting-IP: $1" -d "$(body "$2" "$3")" "$base/register"; }
+            check() { echo "$1: got $2, want $3"; [ "$2" = "$3" ] || { echo "FAIL $1"; exit 1; }; }
+            echo "== account API through the tunnel path"
+            echo "status: $(api "$base/status")"
+            # throwaway passwords made for this run only, so none is written in the repository
+            first=$(openssl rand -hex 12); second=$(openssl rand -hex 12); wrong=$(openssl rand -hex 12)
+            check "register 1 from 198.51.100.7 (Turnstile siteverify over TLS)" "$(reg 198.51.100.7 ciplayer1 "$first")" 201
+            check "register 2 from 198.51.100.7" "$(reg 198.51.100.7 ciplayer2 "$first")" 201
+            check "register the same username again" "$(reg 198.51.100.7 ciplayer1 "$first")" 409
+            check "register 4 from 198.51.100.7 (limit 3 per hour)" "$(reg 198.51.100.7 ciplayer3 "$first")" 429
+            check "register from another player address, 198.51.100.8" "$(reg 198.51.100.8 ciplayer3 "$first")" 201
+            check "register with a weak password" "$(reg 198.51.100.9 ciplayer4 'short')" 400
+            login() { api -H 'Content-Type: application/json' -H "CF-Connecting-IP: 198.51.100.20" -d "{\"username\":\"$1\",\"password\":\"$2\"}" -w '\n%{http_code}' "$base/login"; }
+            out=$(login ciplayer1 "$wrong"); check "login with a wrong password" "${out##*$'\n'}" 401
+            out=$(login nosuchplayer "$wrong"); check "login with an unknown username (same answer)" "${out##*$'\n'}" 401
+            out=$(login ciplayer1 "$first"); check "login" "${out##*$'\n'}" 200
+            token=$(printf '%s' "${out%$'\n'*}" | jq -r .token)
+            echo "me: $(api -H "Authorization: Bearer $token" "$base/me")"
+            check "me without a token" "$(api -o /dev/null -w '%{http_code}' "$base/me")" 401
+            check "password change" "$(api -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' -H "Authorization: Bearer $token" -d "$(printf '{"current_password":"%s","new_password":"%s"}' "$first" "$second")" "$base/password")" 204
+            out=$(login ciplayer1 "$first"); check "login with the old password" "${out##*$'\n'}" 401
+            out=$(login ciplayer1 "$second"); check "login with the new password" "${out##*$'\n'}" 200
+            check "website token on a staff command (/announce)" "$(api -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' -H "Authorization: Bearer $token" -d '{"message":"ci"}' http://172.28.0.10:8080/announce)" 401
+            echo "CORS for the website origin:"; api -s -o /dev/null -D - -X OPTIONS -H 'Origin: https://www.example.invalid' -H 'Access-Control-Request-Method: POST' "$base/login" | grep -i '^access-control-allow-origin' || { echo "FAIL no CORS header for the website"; exit 1; }
+            echo "CORS for another origin (no header expected):"
+            if api -s -o /dev/null -D - -X OPTIONS -H 'Origin: https://evil.example' -H 'Access-Control-Request-Method: POST' "$base/login" | grep -i '^access-control-allow-origin'; then echo "FAIL another origin got a CORS header"; exit 1; else echo "none (good)"; fi
+            echo "== security events of the account API (JSON lines for the Blue team)"
+            sudo sh -c "cat '$work'/logs/security/*.log" | grep -E 'account_|authn_|authz_|password' | tail -20 || sudo find "$work/logs" -type f
             echo "== database: no published port, limited account"
             docker compose port db 3306 || echo "db has no published port (good)"
             docker compose exec -T db sh -c 'export MYSQL_PWD=$(cat /run/secrets/db_app_password); mariadb -umvapp -e "SHOW GRANTS; SELECT COUNT(*) AS tables_in_schema FROM information_schema.tables WHERE table_schema=\"microvolts-db\"; CREATE DATABASE should_fail" 2>&1 || true'
