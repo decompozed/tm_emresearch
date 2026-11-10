@@ -76,7 +76,8 @@ services:
       - /tmp:mode=1777,size=64m
     volumes:
       - dbdata:/var/lib/mysql
-      - ${TM_SCHEMA_SQL:-./microvolts-db.sql}:/docker-entrypoint-initdb.d/10-schema.sql:ro
+      - ${TM_SCHEMA_SQL:-./microvolts-db.sql}:/schema/microvolts-db.sql:ro
+      - ./db-init/10-schema.sh:/docker-entrypoint-initdb.d/10-schema.sh:ro   # loads the schema on the first start
     environment:
       MARIADB_ROOT_PASSWORD_FILE: /run/secrets/db_root_password
       MARIADB_DATABASE: microvolts-db

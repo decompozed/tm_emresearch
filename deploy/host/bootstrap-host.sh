@@ -324,11 +324,12 @@ if [[ -f "$deploy_dir/host/tm-deploy.sh" ]]; then run install -m 0755 -o root -g
 for f in tm-backup.sh tm-restore.sh; do
     if [[ -f "$deploy_dir/db-backup/$f" ]]; then run install -m 0750 -o root -g root "$deploy_dir/db-backup/$f" "$base/bin/$f"; fi
 done
-# The deploy user replaces these two files on every deploy, in its own folder (see host/tm-deploy.sh)
+# The deploy user replaces these files on every deploy, in its own folder (see host/tm-deploy.sh)
 run install -d -m 0755 -o "$deploy_user" -g "$deploy_user" "$base/release"
 if [[ -f "$deploy_dir/docker-compose.yml" && -f "$deploy_dir/../microvolts-db.sql" ]]; then
     run install -m 0644 -o "$deploy_user" -g "$deploy_user" "$deploy_dir/docker-compose.yml" "$base/release/docker-compose.yml"
     run install -m 0644 -o "$deploy_user" -g "$deploy_user" "$deploy_dir/../microvolts-db.sql" "$base/release/microvolts-db.sql"
+    run install -D -m 0644 -o "$deploy_user" -g "$deploy_user" "$deploy_dir/db-init/10-schema.sh" "$base/release/db-init/10-schema.sh"
 fi
 if [[ ! -f "$base/tm.env" && -f "$deploy_dir/tm.env.example" ]]; then
     run install -m 0644 -o root -g root "$deploy_dir/tm.env.example" "$base/tm.env"

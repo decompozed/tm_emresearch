@@ -77,8 +77,8 @@ jobs:
             ProxyCommand cloudflared access ssh --hostname %h
           EOF
 
-      # The forced command on the VPS reads a tar of the two files it may replace from stdin, then pulls the image and
+      # The forced command on the VPS reads a tar of the three files it may replace from stdin, then pulls the image and
       # starts the stack. It refuses anything else.
       - name: Deploy
         run: |
-          tar -c -C . deploy/docker-compose.yml microvolts-db.sql | ssh vps "deploy $TAG"
+          tar -c -C . deploy/docker-compose.yml deploy/db-init/10-schema.sh microvolts-db.sql | ssh vps "deploy $TAG"
