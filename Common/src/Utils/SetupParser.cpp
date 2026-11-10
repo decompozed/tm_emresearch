@@ -533,6 +533,20 @@ namespace Common
                         }
                     }
                 }
+                // The account API of the website stores the email encrypted with this key, also without EnhancedSecurity
+                if (m_iniFile.contains("General") && m_iniFile["General"].contains("EmailSecret"))
+                {
+                    const std::optional<std::string> keyHex = readSecretOrStop(m_iniFile["General"]["EmailSecret"].as<std::string>(), "SetupParser::getGeneralSetupImpl");
+                    if (keyHex && keyHex->size() == 64)
+                    {
+                        std::string decoded;
+                        CryptoPP::StringSource ss(*keyHex, true, new CryptoPP::HexDecoder(new CryptoPP::StringSink(decoded)));
+                        if (decoded.size() == 32)
+                        {
+                            generalSetup.emailSecret.Assign(reinterpret_cast<const CryptoPP::byte*>(decoded.data()), decoded.size());
+                        }
+                    }
+                }
                 return generalSetup;
             }
 
