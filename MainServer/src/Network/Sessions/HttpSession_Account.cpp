@@ -301,6 +301,7 @@ namespace Main
             const auto encryptedEmail = Common::Utils::encryptEmail(email, Common::Utils::SetupParser::getInstance().getGeneralSetup().emailSecret);
             if (!encryptedEmail)
             {
+                ::Utils::Logger::log("Could not encrypt the email of a new account", ::Utils::LogType::Error, "HttpSession::handleAccountRegister");
                 return fail(http::status::internal_server_error, "server_error");
             }
             const std::string hash = Common::Utils::hashPassword(password);
@@ -322,6 +323,7 @@ namespace Main
             const WebAccountLookup created = m_scheduler.immediatePersist(std::source_location::current(), &Main::Persistence::PersistentDatabase::getWebAccountByUsername, username);
             if (created.status != WebAccountLookup::Status::Found)
             {
+                ::Utils::Logger::log("The new account could not be read back", ::Utils::LogType::Error, "HttpSession::handleAccountRegister");
                 return fail(http::status::internal_server_error, "server_error");
             }
             apiEvent("account_register", "LOW", created.account.accountId, "ok", "created");

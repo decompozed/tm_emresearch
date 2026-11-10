@@ -133,6 +133,11 @@ namespace Main
                // The account API takes at most 4 KiB of body; the staff endpoints keep the 1 MiB default of the parser
                const std::string_view target = parser.get().target();
                parser.body_limit(target.starts_with("/account/") ? Common::Utils::AccountApi::maxBodyBytes : std::uint64_t{ 1024 * 1024 });
+               // The limit is read when the header ends, so the declared length is checked here as well
+               if (target.starts_with("/account/") && parser.content_length().value_or(0) > Common::Utils::AccountApi::maxBodyBytes)
+               {
+                  throw boost::system::system_error(http::error::body_limit);
+               }
                boost::beast::http::read(m_socket, m_buffer, parser);
                m_request = parser.release();
             } catch(const boost::system::system_error& e) {
