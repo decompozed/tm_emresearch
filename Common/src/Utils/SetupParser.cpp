@@ -23,6 +23,7 @@
 #include "../../include/Utils/SetupParser.h"
 #include "../../include/Utils/SecretSource.h"
 #include <regex>
+#include <charconv>
 
 
 
@@ -909,6 +910,26 @@ namespace Common
                 ::Utils::Logger::log("[Website] TurnstileSecret is not configured: the captcha check of POST /account/register is SKIPPED (local tests only)",
                     ::Utils::LogType::Warning, "SetupParser::getWebsiteSetupImpl");
             }
+
+            // Optional, 1 to 10000. A value that is not a plain number in that range keeps the default and is logged.
+            const auto readLimit = [this, &section](const char* key, std::uint32_t& target)
+            {
+                if (!section.contains(key))
+                    return;
+                const std::string text = trim(section[key].as<std::string>());
+                std::uint32_t value = 0;
+                const auto [end, error] = std::from_chars(text.data(), text.data() + text.size(), value);
+                if (error != std::errc{} || end != text.data() + text.size() || value < 1 || value > 10000)
+                {
+                    ::Utils::Logger::log(std::string("[Website] ") + key + " must be a number from 1 to 10000, keeping " + std::to_string(target),
+                        ::Utils::LogType::Warning, "SetupParser::getWebsiteSetupImpl");
+                    return;
+                }
+                target = value;
+            };
+            readLimit("RegisterLimitPerHour", website.registerLimitPerHour);
+            readLimit("LoginLimitPer15Min", website.loginLimitPer15Min);
+            readLimit("PasswordLimitPer15Min", website.passwordLimitPer15Min);
 
             return website;
         }

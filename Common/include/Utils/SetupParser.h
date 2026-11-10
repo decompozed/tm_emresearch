@@ -69,6 +69,11 @@ namespace Common
             std::vector<std::string> allowedOrigins;
             std::vector<std::string> trustedProxies; // [Website] TrustedProxy: peers whose CF-Connecting-IP header is believed (127.0.0.1 always is)
             std::string turnstileSecret;             // empty: the Cloudflare Turnstile check of the account API is skipped
+            // Rate limits of the account API per client address. Many players behind one school or event network share an
+            // address, so an event can raise them in config.ini without a new build.
+            std::uint32_t registerLimitPerHour = 5;
+            std::uint32_t loginLimitPer15Min = 10;
+            std::uint32_t passwordLimitPer15Min = 5;
         };
 
         struct ClientSetup

@@ -30,9 +30,11 @@ namespace Main
         {
             using namespace std::chrono_literals;
 
-            Api::RateLimiter& registerLimiter() { static Api::RateLimiter limiter(5, 1h); return limiter; }
-            Api::RateLimiter& loginLimiter() { static Api::RateLimiter limiter(10, 15min); return limiter; }
-            Api::RateLimiter& passwordLimiter() { static Api::RateLimiter limiter(5, 15min); return limiter; }
+            // The limits come from [Website] (defaults 5 per hour, 10 and 5 per 15 minutes), read once on the first request
+            const Common::Utils::WebsiteSetup& websiteSetup() { return Common::Utils::SetupParser::getInstance().getWebsiteSetup(); }
+            Api::RateLimiter& registerLimiter() { static Api::RateLimiter limiter(websiteSetup().registerLimitPerHour, 1h); return limiter; }
+            Api::RateLimiter& loginLimiter() { static Api::RateLimiter limiter(websiteSetup().loginLimitPer15Min, 15min); return limiter; }
+            Api::RateLimiter& passwordLimiter() { static Api::RateLimiter limiter(websiteSetup().passwordLimitPer15Min, 15min); return limiter; }
 
             constexpr std::uint32_t firstStaffGrade = 3; // GRADE_MOD: the staff endpoints need this grade, the website never signs such an account in
 
