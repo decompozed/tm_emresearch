@@ -4,7 +4,7 @@
 #
 #   make-secrets.sh [--dir DIR] [--cf-tunnel-token-file FILE] [--email-token-file FILE] [--rotate NAME]...
 #
-# The directory (default /opt/toymayhem/secrets) is created with mode 0700. The files get mode 0444: the containers run
+# A new directory (default /opt/toymayhem/secrets) is created with mode 0700. The files get mode 0444: the containers run
 # as other users (10001 game, 999 database, 65532 cloudflared) and Docker mounts the file as it is. Only root can enter
 # the directory, so only root and the containers (which each get only the files they need) can read them.
 set -euo pipefail
@@ -25,8 +25,9 @@ while [[ $# -gt 0 ]]; do
 done
 
 umask 0077
-mkdir -p "$dir"
-chmod 0700 "$dir"
+# A new folder is root only (0700). The bootstrap script makes it 0710 root:docker so the deploy user can start the stack;
+# an existing folder keeps its mode.
+[[ -d "$dir" ]] || { mkdir -p "$dir"; chmod 0700 "$dir"; }
 
 hex()   { head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n'; }
 alnum() { LC_ALL=C tr -dc 'A-Za-z0-9' < /dev/urandom | head -c 40 || true; }
@@ -59,5 +60,5 @@ else [[ -s "$dir/email_token" ]] && echo "kept     email_token" || put email_tok
 if [[ -n "$cf_token_file" ]]; then put cf_tunnel_token "$(tr -d '\r\n' < "$cf_token_file")"
 else [[ -s "$dir/cf_tunnel_token" ]] && echo "kept     cf_tunnel_token" || { put cf_tunnel_token "paste-the-tunnel-token-here"; echo "NOTE: cf_tunnel_token is a placeholder; cloudflared will not connect until you put the real token in"; }; fi
 
-if [[ $(id -u) -eq 0 ]]; then chown -R root:root "$dir"; fi
+if [[ $(id -u) -eq 0 ]]; then chown root:root "$dir"/*; fi
 echo "done: $dir"

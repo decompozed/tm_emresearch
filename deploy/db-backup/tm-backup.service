@@ -1,0 +1,24 @@
+[Unit]
+Description=Encrypted backup of the ToyMayhem database to Cloudflare R2
+After=docker.service network-online.target
+Wants=network-online.target
+ConditionPathExists=/etc/toymayhem/backup.env
+
+[Service]
+Type=oneshot
+ExecStart=/opt/toymayhem/bin/tm-backup.sh
+StateDirectory=toymayhem-backup
+StateDirectoryMode=0700
+TimeoutStartSec=30min
+Nice=10
+IOSchedulingClass=idle
+# It needs the Docker socket (root), so the rest is closed as far as possible
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=/var/lib/toymayhem-backup /etc/toymayhem/gnupg
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
