@@ -139,6 +139,10 @@ else
     say "no --ci-pubkey-file: the deploy user gets no key yet (the pipeline deploy job stays unusable until you add one)"
 fi
 if getent group blueteam >/dev/null; then say "group exists: blueteam"; else run groupadd --system blueteam; fi
+# tm-ssh: who may log in with a shell (admin, deploy). blueteam: read-only log access over SFTP, nothing else.
+if getent group tm-ssh >/dev/null; then say "group exists: tm-ssh"; else run groupadd --system tm-ssh; fi
+run usermod -aG tm-ssh "$admin_user"
+run usermod -aG tm-ssh "$deploy_user"
 
 # ---------------------------------------------------------------------------------------------------------------------
 step "4. sshd: keys only, no root login"
@@ -149,7 +153,7 @@ PasswordAuthentication no
 KbdInteractiveAuthentication no
 PubkeyAuthentication yes
 AuthenticationMethods publickey
-AllowUsers $admin_user $deploy_user
+AllowGroups tm-ssh blueteam
 MaxAuthTries 3
 LoginGraceTime 20
 X11Forwarding no
@@ -157,6 +161,13 @@ AllowAgentForwarding no
 PermitEmptyPasswords no
 ClientAliveInterval 300
 ClientAliveCountMax 2
+
+# The Blue team can read the logs and nothing else: SFTP only, read only, no shell, no tunnels (so no way to the staff port)
+Match Group blueteam
+    ForceCommand internal-sftp -R
+    AllowTcpForwarding no
+    PermitTTY no
+    X11Forwarding no
 EOF
 if ((apply)); then
     if sshd -t; then
@@ -309,9 +320,7 @@ run install -d -m 0710 -o root -g docker "$base/secrets"
 run install -d -m 0750 -o root -g root /etc/toymayhem
 # Logs of the three servers (TB_LOG_DIR). The containers run as uid 10001; the Blue team reads through the group blueteam.
 run install -d -m 2750 -o 10001 -g blueteam "$(dirname "$logs")" "$logs"
-for f in tm-deploy.sh; do
-    if [[ -f "$deploy_dir/host/$f" ]]; then run install -m 0755 -o root -g root "$deploy_dir/host/$f" "$base/bin/$f"; fi
-done
+if [[ -f "$deploy_dir/host/tm-deploy.sh" ]]; then run install -m 0755 -o root -g root "$deploy_dir/host/tm-deploy.sh" "$base/bin/tm-deploy.sh"; fi
 for f in tm-backup.sh tm-restore.sh; do
     if [[ -f "$deploy_dir/db-backup/$f" ]]; then run install -m 0750 -o root -g root "$deploy_dir/db-backup/$f" "$base/bin/$f"; fi
 done

@@ -21,7 +21,7 @@ trap 'rm -rf "$stage"' EXIT
 
 # Only these two members are accepted, at most 5 MB. tar refuses absolute paths and ".." by itself.
 head -c 5242880 | tar -x --no-same-owner --no-same-permissions -C "$stage" deploy/docker-compose.yml microvolts-db.sql
-test -s "$stage/deploy/docker-compose.yml" -a -s "$stage/microvolts-db.sql"
+[[ -s "$stage/deploy/docker-compose.yml" && -s "$stage/microvolts-db.sql" ]]
 
 printf 'TM_IMAGE=%s:%s\n' "$registry_image" "$tag" > "$stage/image.env"
 export TM_SCHEMA_SQL="$stage/microvolts-db.sql" TM_SECRETS_DIR="$base/secrets"
