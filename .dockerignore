@@ -1,0 +1,12 @@
+.git
+.github
+Output
+build
+vcpkg_installed
+.vcpkg
+.cache
+deploy/*
+!deploy/docker-entrypoint.sh
+!deploy/healthcheck.sh
+**/*.log
+*.sql.gpg
