@@ -275,6 +275,49 @@ jobs:
             grype-repo.json
             scan-summary.txt
 
+  host-scripts:
+    name: Host scripts (shellcheck, dry run on Ubuntu 24.04)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Syntax and shellcheck
+        run: |
+          shellcheck --version | head -2
+          for f in deploy/host/*.sh deploy/db-backup/*.sh deploy/scripts/*.sh deploy/docker-entrypoint.sh deploy/healthcheck.sh; do
+            bash -n "$f"
+            shellcheck --severity=warning "$f"
+          done
+
+      - name: Bootstrap script, dry run (changes nothing)
+        run: |
+          deploy/host/bootstrap-host.sh --lock-ssh-to-access | tee bootstrap-dry-run.txt
+          # --apply must refuse without a key, and nothing may have changed
+          if deploy/host/bootstrap-host.sh --apply 2>&1 | tee -a bootstrap-dry-run.txt; then echo "apply without root/key should fail"; exit 1; fi || true
+          test ! -e /etc/sudoers.d/90-tmadmin
+          if id tmadmin 2>/dev/null; then echo "user was created by a dry run"; exit 1; fi
+
+      - name: The deploy key can run nothing but the deploy command
+        run: |
+          for c in "" "bash" "deploy latest" "deploy sha-123; id" "deploy sha-0123456789abcdef0123456789abcdef01234567 extra"; do
+            out=$(SSH_ORIGINAL_COMMAND="$c" deploy/host/tm-deploy.sh < /dev/null 2>&1) && { echo "accepted: '$c'"; exit 1; } || echo "refused '$c': $out"
+          done
+
+      - name: Compose file renders (placeholders only)
+        run: |
+          TM_DOMAIN=example.invalid docker compose -f deploy/docker-compose.yml config --quiet
+          ! TM_DOMAIN= docker compose -f deploy/docker-compose.yml config --quiet 2>/dev/null
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: always()
+        with:
+          name: host-scripts
+          path: bootstrap-dry-run.txt
+          if-no-files-found: ignore
+
   image:
     name: Container image (build and smoke test)
     runs-on: ubuntu-24.04
@@ -361,6 +404,25 @@ jobs:
             echo "== config.ini as generated for MainServer (no secret values in it)"
             docker compose exec -T main sh -c 'cat /app/emu/Setup/config.ini' 2>/dev/null || docker compose exec -T main bash -c 'cat /app/emu/Setup/config.ini'
           } 2>&1 | tee ../smoke-test.txt
+          echo "== backup and restore round trip with a throwaway key" | tee -a ../smoke-test.txt
+          {
+            export GNUPGHOME="$work/gpg-priv"; mkdir -m 700 "$GNUPGHOME"
+            gpg --batch --pinentry-mode loopback --passphrase '' --quick-generate-key 'tm ci backup <ci@example.invalid>' rsa3072 encrypt 1d 2>&1
+            fpr=$(gpg --list-keys --with-colons | awk -F: '$1=="fpr"{print $10; exit}')
+            gpg --export --armor "$fpr" > "$work/backup-public.asc"
+            unset GNUPGHOME
+            sql() { docker compose exec -T db sh -c "MYSQL_PWD=\$(cat /run/secrets/db_app_password) mariadb -umvapp --batch --skip-column-names microvolts-db -e \"$1\""; }
+            sql 'CREATE TABLE tm_marker (x INT); INSERT INTO tm_marker VALUES (42)'
+            GPG_RECIPIENT="$fpr" TM_BACKUP_ENV=/dev/null TM_BACKUP_PUBKEY="$work/backup-public.asc" TM_BACKUP_GNUPGHOME="$work/gpg-pub"                 db-backup/tm-backup.sh --local-only "$work/backups"
+            ls -l "$work/backups"
+            echo "plain text visible in the encrypted file: $(grep -c tm_marker "$work"/backups/*.gpg || true) (must be 0)"
+            sql 'DROP TABLE tm_marker'
+            GNUPGHOME="$work/gpg-priv" db-backup/tm-restore.sh --decrypt "$work"/backups/toymayhem-*.sql.gz.gpg | TM_COMPOSE_PROJECT=toymayhem db-backup/tm-restore.sh --load --yes
+            echo "after restore, tm_marker holds: $(sql 'SELECT x FROM tm_marker')"
+            test "$(sql 'SELECT x FROM tm_marker')" = 42
+            sql 'DROP TABLE tm_marker'
+          } 2>&1 | tee -a ../smoke-test.txt
+          timeout 180 bash -c 'for s in auth main cast; do until [ "$(docker inspect -f "{{.State.Health.Status}}" "$(docker compose ps -q $s)")" = healthy ]; do sleep 3; done; done'
           echo "== restart one server, it must come back healthy"
           docker compose restart main
           timeout 120 bash -c 'until [ "$(docker inspect -f "{{.State.Health.Status}}" "$(docker compose ps -q main)")" = healthy ]; do sleep 3; done'
