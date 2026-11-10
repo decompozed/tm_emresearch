@@ -1,0 +1,84 @@
+name: Deploy to the VPS
+
+# DISABLED until the VPS and the secrets exist. The job below only runs when the repository variable
+# DEPLOY_ENABLED is set to "true" (Settings, Secrets and variables, Actions, Variables). Without it the run is skipped.
+# It needs these (see deploy/README.md, "What you create once"):
+#   variables: DEPLOY_ENABLED=true, DEPLOY_SSH_HOST (for example ssh.example.invalid), DEPLOY_USER (deploy)
+#   secrets:   CF_ACCESS_CLIENT_ID, CF_ACCESS_CLIENT_SECRET   Cloudflare Access service token
+#              DEPLOY_SSH_KEY                                  private key of the CI key (the forced-command key on the VPS)
+#              DEPLOY_SSH_KNOWN_HOSTS                          the host key line of the VPS (ssh-keyscan on the console)
+# The SSH key on the VPS may only run /opt/toymayhem/bin/tm-deploy.sh, which accepts "deploy <image tag>" and nothing else.
+# Never run on a schedule or on push: a person starts it and names the image tag (sha-<commit> from ghcr.io).
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Image tag to deploy, for example sha-0123456789abcdef0123456789abcdef01234567
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy (needs DEPLOY_ENABLED)
+    if: ${{ vars.DEPLOY_ENABLED == 'true' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    environment: production   # add required reviewers to this environment in the repository settings
+    env:
+      TAG: ${{ inputs.tag }}
+      DEPLOY_SSH_HOST: ${{ vars.DEPLOY_SSH_HOST }}
+      DEPLOY_USER: ${{ vars.DEPLOY_USER }}
+      TUNNEL_SERVICE_TOKEN_ID: ${{ secrets.CF_ACCESS_CLIENT_ID }}
+      TUNNEL_SERVICE_TOKEN_SECRET: ${{ secrets.CF_ACCESS_CLIENT_SECRET }}
+    steps:
+      - name: Check the tag
+        run: |
+          [[ "$TAG" =~ ^sha-[0-9a-f]{40}$ ]] || { echo "tag must look like sha-<40 hex>"; exit 1; }
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Install cloudflared (signed Cloudflare package repository)
+        run: |
+          sudo mkdir -p --mode=0755 /usr/share/keyrings
+          curl -fsSL https://pkg.cloudflare.com/cloudflare-main.gpg | sudo tee /usr/share/keyrings/cloudflare-main.gpg > /dev/null
+          echo 'deb [signed-by=/usr/share/keyrings/cloudflare-main.gpg] https://pkg.cloudflare.com/cloudflared any main' | sudo tee /etc/apt/sources.list.d/cloudflared.list
+          sudo apt-get update -qq && sudo apt-get install -y -qq cloudflared
+
+      - name: Prepare SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_SSH_KNOWN_HOSTS: ${{ secrets.DEPLOY_SSH_KNOWN_HOSTS }}
+        run: |
+          install -d -m 0700 ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/id_ci && chmod 0600 ~/.ssh/id_ci
+          # the host is only known by name through Access, so the line in known_hosts is for that name
+          printf '%s\n' "$DEPLOY_SSH_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          cat > ~/.ssh/config <<EOF
+          Host vps
+            HostName ${DEPLOY_SSH_HOST}
+            User ${DEPLOY_USER}
+            IdentityFile ~/.ssh/id_ci
+            IdentitiesOnly yes
+            StrictHostKeyChecking yes
+            ProxyCommand cloudflared access ssh --hostname %h
+          EOF
+
+      # The forced command on the VPS reads a tar of the two files it may replace from stdin, then pulls the image and
+      # starts the stack. It refuses anything else.
+      - name: Deploy
+        run: |
+          tar -c -C . deploy/docker-compose.yml microvolts-db.sql | ssh vps "deploy $TAG"

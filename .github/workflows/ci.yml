@@ -274,3 +274,153 @@ jobs:
             grype-vcpkg.json
             grype-repo.json
             scan-summary.txt
+
+  image:
+    name: Container image (build and smoke test)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 300
+    env:
+      IMAGE_LOCAL: tm_emulator:ci
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      # The same cache the build-test job fills. It only seeds the build (read only); packages that are missing are compiled.
+      - name: Restore the compiled dependencies
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .cache/vcpkg-bin
+          key: vcpkg-${{ runner.os }}-gcc14-${{ hashFiles('vcpkg.json', 'vcpkg-configuration.json', 'vcpkg-overlays/**') }}
+          restore-keys: vcpkg-${{ runner.os }}-gcc14-
+
+      - name: Make sure the seed folder exists
+        run: mkdir -p .cache/vcpkg-bin
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      # Builds only. Nothing is pushed here: pushing is the job publish-image, on main, after everything else passed.
+      - name: Build the image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: .
+          file: deploy/Dockerfile
+          build-contexts: |
+            vcpkg-seed=.cache/vcpkg-bin
+          load: true
+          push: false
+          tags: ${{ env.IMAGE_LOCAL }}
+          cache-from: type=gha,scope=tm-image
+          cache-to: type=gha,scope=tm-image,mode=max
+
+      - name: What is in the image
+        run: |
+          {
+            docker image inspect "$IMAGE_LOCAL" --format 'size {{.Size}} bytes, user "{{.Config.User}}", entrypoint {{.Config.Entrypoint}}'
+            docker run --rm --entrypoint /bin/bash "$IMAGE_LOCAL" -c '
+              id; echo "-- tools that must not be there:"; for t in gcc g++ cc make cmake gdb strace tcpdump mysql mariadb mysqld supervisord python3 perl curl wget; do command -v $t || true; done; echo "(end of list)"
+              ls -l /app/emu/Output'
+          } | tee image-contents.txt
+
+      - name: Smoke test with the compose file (database, netns and the three servers)
+        run: |
+          set -euo pipefail
+          work="$RUNNER_TEMP/tm"
+          mkdir -p "$work/logs"
+          sudo chown 10001:10001 "$work/logs"
+          export TM_DOMAIN=example.invalid TM_IMAGE="$IMAGE_LOCAL" TM_SECRETS_DIR="$work/secrets" TM_LOG_HOST_DIR="$work/logs" TM_SCHEMA_SQL="$PWD/microvolts-db.sql"
+          deploy/scripts/make-secrets.sh --dir "$TM_SECRETS_DIR" > /dev/null
+          cd deploy
+          docker compose config --quiet
+          if ! docker compose up --detach --wait --wait-timeout 420 db netns auth main cast; then
+            docker compose ps -a
+            docker compose logs --no-color
+            exit 1
+          fi
+          {
+            echo "== services"; docker compose ps
+            echo "== settings of every container"
+            for c in $(docker compose ps -q); do
+              docker inspect "$c" --format '{{.Name}} user={{.Config.User}} readonly={{.HostConfig.ReadonlyRootfs}} capdrop={{.HostConfig.CapDrop}} secopt={{.HostConfig.SecurityOpt}} mem={{.HostConfig.Memory}} pids={{.HostConfig.PidsLimit}} privileged={{.HostConfig.Privileged}} ports={{json .NetworkSettings.Ports}}'
+            done
+            echo "== published ports on the host (must be 13000, 13005, 13006 only)"
+            docker compose ps --format '{{.Service}} {{.Ports}}'
+            echo "== game ports from the host"
+            for p in 13000 13005 13006; do (exec 3<>/dev/tcp/127.0.0.1/$p) && echo "port $p open"; done
+            echo "== staff login 13001 is not published: 127.0.0.1 must refuse"
+            if (exec 3<>/dev/tcp/127.0.0.1/13001) 2>/dev/null; then echo "FAIL 13001 reachable"; exit 1; else echo "13001 refused on 127.0.0.1 (good)"; fi
+            echo "== staff login 13001 from the host through the container address (the SSH tunnel path)"
+            (exec 3<>/dev/tcp/172.28.0.10/13001) && echo "13001 reachable on 172.28.0.10 from the host"
+            echo "== account API on 8080 through the container address (what cloudflared connects to)"
+            curl -sS -m 10 -o /dev/null -w 'GET / -> HTTP %{http_code}\n' http://172.28.0.10:8080/ || true
+            echo "== database: no published port, limited account"
+            docker compose port db 3306 || echo "db has no published port (good)"
+            docker compose exec -T db sh -c 'export MYSQL_PWD=$(cat /run/secrets/db_app_password); mariadb -umvapp -e "SHOW GRANTS; SELECT COUNT(*) AS tables_in_schema FROM information_schema.tables WHERE table_schema=\"microvolts-db\"; CREATE DATABASE should_fail" 2>&1 || true'
+            echo "== log files written by the servers (TB_LOG_DIR)"
+            sudo find "$work/logs" -maxdepth 2 -type f | sort
+            echo "== config.ini as generated for MainServer (no secret values in it)"
+            docker compose exec -T main sh -c 'cat /app/emu/Setup/config.ini' 2>/dev/null || docker compose exec -T main bash -c 'cat /app/emu/Setup/config.ini'
+          } 2>&1 | tee ../smoke-test.txt
+          echo "== restart one server, it must come back healthy"
+          docker compose restart main
+          timeout 120 bash -c 'until [ "$(docker inspect -f "{{.State.Health.Status}}" "$(docker compose ps -q main)")" = healthy ]; do sleep 3; done'
+          docker compose ps | tee -a ../smoke-test.txt
+          docker compose logs --no-color --tail 40 | tee ../smoke-logs.txt > /dev/null
+          docker compose down --volumes
+
+      - name: Keep the results
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: image-results
+          path: |
+            image-contents.txt
+            smoke-test.txt
+            smoke-logs.txt
+          if-no-files-found: ignore
+
+      - name: Save the tested image
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: docker save "$IMAGE_LOCAL" | gzip -1 > tm_emulator-image.tar.gz
+
+      - name: Hand the tested image to the publish job
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: image
+          path: tm_emulator-image.tar.gz
+          retention-days: 1
+
+  publish-image:
+    name: Publish the image (ghcr.io, main only)
+    # Only pushes to main, and only when every other job of this run passed. Pull requests and branches never get here.
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: [image, build-test, sbom-scan, sast, fuzz, secret-scan]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    # The only job that can write to the registry
+    permissions:
+      contents: read
+      packages: write
+    env:
+      REGISTRY_IMAGE: ghcr.io/macrovolts/tm_emulator
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: image
+
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      # The exact image that passed the smoke test is the one that gets pushed. One tag per commit, plus "main" for the newest.
+      - name: Push
+        run: |
+          docker load --input tm_emulator-image.tar.gz
+          docker tag tm_emulator:ci "$REGISTRY_IMAGE:sha-${GITHUB_SHA}"
+          docker tag tm_emulator:ci "$REGISTRY_IMAGE:main"
+          docker push "$REGISTRY_IMAGE:sha-${GITHUB_SHA}" | tee push.txt
+          docker push "$REGISTRY_IMAGE:main"
+          { echo "### Image"; echo "\`$REGISTRY_IMAGE:sha-${GITHUB_SHA}\`"; grep -o 'digest: sha256:[0-9a-f]*' push.txt | head -1; } >> "$GITHUB_STEP_SUMMARY"
