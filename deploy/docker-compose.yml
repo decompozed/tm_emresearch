@@ -83,7 +83,10 @@ services:
       MARIADB_USER: mvapp                      # limited account: all rights on microvolts-db only, nothing global
       MARIADB_PASSWORD_FILE: /run/secrets/db_app_password
     secrets: [db_root_password, db_app_password]
-    command: ["--skip-name-resolve"]
+    # The servers ask for tables like "Users" and "BlockedPlayers", microvolts-db.sql creates "users" and "blockedplayers".
+    # That works on Windows; on Linux table names are case sensitive unless the server is started with
+    # lower-case-table-names=1 (it must be set when the data folder is created, which is what this does on the first start).
+    command: ["--skip-name-resolve", "--lower-case-table-names=1"]
     cap_drop: [ALL]
     security_opt: ["no-new-privileges:true"]
     mem_limit: 1g
