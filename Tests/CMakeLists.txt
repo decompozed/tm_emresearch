@@ -54,7 +54,7 @@ else()
     # tests check the exact sizes)
     target_compile_options(Tests PRIVATE -Wall -Wextra -Werror -Wno-stringop-overflow)
     # picojson, pulled in by jwt-cpp, triggers this warning in its own header
-    set_source_files_properties(Secrets/JwtKeysTests.cpp PROPERTIES COMPILE_OPTIONS "-Wno-error=maybe-uninitialized")
+    set_source_files_properties(Secrets/JwtKeysTests.cpp Secrets/WebTokenTests.cpp PROPERTIES COMPILE_OPTIONS "-Wno-error=maybe-uninitialized")
 endif()
 
 include(GoogleTest)
