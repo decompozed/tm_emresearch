@@ -13,6 +13,7 @@
 #include <mariadb/conncpp.hpp>
 #include <mariadb/conncpp/Connection.hpp>
 #include "Structures/AccountInfo/MuteInfo.h"
+#include "Structures/AccountInfo/WebAccount.h"
 #include <expected>
 
 namespace Main 
@@ -119,6 +120,15 @@ namespace Main
 			bool unbanPlayer(const std::string& nickname);
 			bool addPlayer(const std::string& username, const std::string& password, const std::string& nickname, const std::string& email, const std::string& secret2fa);
 			bool playerExistsByUsername(const std::string& username);
+			// The website account API (MainDatabaseManager_WebAccount.cpp)
+			Main::Structures::WebAccountLookup getWebAccountByUsername(const std::string& username);
+			Main::Structures::WebAccountLookup getWebAccountById(std::uint32_t accountId);
+			Main::Structures::WebRegisterResult registerWebAccount(const std::string& username, const std::string& passwordHash, const std::string& nickname,
+				const std::string& encryptedEmail);
+			bool replacePasswordHash(std::uint32_t accountId, const std::string& oldHash, const std::string& newHash);
+			std::optional<std::uint32_t> incrementFailed2fas(std::uint32_t accountId);
+			bool lockTwoFactor(std::uint32_t accountId, std::uint64_t untilEpoch);
+			void resetFailedLogins(std::uint32_t accountId);
 			bool playerExistsByNickname(const std::string& username);
 			auto getPlayerItems(std::uint32_t playerID) -> std::pair<std::vector<Item>, std::unordered_map<std::uint16_t, std::vector<EquippedItem>>>;
 			bool addPlayerItems(std::uint32_t accountID, const std::vector<Item>& items, std::uint32_t latestCharacterSelected = -1);
