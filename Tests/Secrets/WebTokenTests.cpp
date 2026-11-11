@@ -76,7 +76,9 @@ TEST(WebToken, WrongKeyAndTamperingAreRefused)
 	EXPECT_FALSE(WebToken::verify(WebToken::issue(7, 1, attackerKey), key, oldKey).has_value());
 
 	std::string token = WebToken::issue(7, 1, key);
-	token.back() = token.back() == 'A' ? 'B' : 'A';
+	// a character inside the signature: the last one carries only 4 bits, and a change in its 2 padding bits decodes the same
+	const std::size_t at = token.rfind('.') + 10;
+	token[at] = token[at] == 'A' ? 'B' : 'A';
 	EXPECT_FALSE(WebToken::verify(token, key, "").has_value());
 	EXPECT_FALSE(WebToken::verify("", key, "").has_value());
 	EXPECT_FALSE(WebToken::verify("not.a.token", key, "").has_value());
