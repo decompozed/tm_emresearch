@@ -415,6 +415,8 @@ jobs:
             check "register 4 from 198.51.100.7 (limit 3 per hour)" "$(reg 198.51.100.7 ciplayer3 "$first")" 429
             check "register from another player address, 198.51.100.8" "$(reg 198.51.100.8 ciplayer3 "$first")" 201
             check "register with a weak password" "$(reg 198.51.100.9 ciplayer4 'short')" 400
+            # a password from every breach list: refused by the server's own range check (Pwned Passwords over TLS)
+            check "register with a breached password" "$(reg 198.51.100.10 ciplayer5 'qwertyuiop')" 400
             login() { api -H 'Content-Type: application/json' -H "CF-Connecting-IP: 198.51.100.20" -d "{\"username\":\"$1\",\"password\":\"$2\"}" -w '\n%{http_code}' "$base/login"; }
             out=$(login ciplayer1 "$wrong"); check "login with a wrong password" "${out##*$'\n'}" 401
             out=$(login nosuchplayer "$wrong"); check "login with an unknown username (same answer)" "${out##*$'\n'}" 401
@@ -422,9 +424,20 @@ jobs:
             token=$(printf '%s' "${out%$'\n'*}" | jq -r .token)
             echo "me: $(api -H "Authorization: Bearer $token" "$base/me")"
             check "me without a token" "$(api -o /dev/null -w '%{http_code}' "$base/me")" 401
-            check "password change" "$(api -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' -H "Authorization: Bearer $token" -d "$(printf '{"current_password":"%s","new_password":"%s"}' "$first" "$second")" "$base/password")" 204
+            me() { api -o /dev/null -w '%{http_code}' -H "Authorization: Bearer $1" "$base/me"; }
+            out=$(login ciplayer1 "$first"); check "a second login of the same account" "${out##*$'\n'}" 200
+            other=$(printf '%s' "${out%$'\n'*}" | jq -r .token)
+            out=$(api -H 'Content-Type: application/json' -H "Authorization: Bearer $token" -d "$(printf '{"current_password":"%s","new_password":"%s"}' "$first" "$second")" -w '\n%{http_code}' "$base/password")
+            check "password change" "${out##*$'\n'}" 200
+            renewed=$(printf '%s' "${out%$'\n'*}" | jq -r .token)
+            check "the token that changed the password, after the change" "$(me "$token")" 401
+            check "the other session, after the change" "$(me "$other")" 401
+            check "the token the change answered with" "$(me "$renewed")" 200
             out=$(login ciplayer1 "$first"); check "login with the old password" "${out##*$'\n'}" 401
             out=$(login ciplayer1 "$second"); check "login with the new password" "${out##*$'\n'}" 200
+            check "logout" "$(api -o /dev/null -w '%{http_code}' -X POST -H "Authorization: Bearer $renewed" "$base/logout")" 204
+            check "the token after the logout" "$(me "$renewed")" 401
+            check "logout again with the same token" "$(api -o /dev/null -w '%{http_code}' -X POST -H "Authorization: Bearer $renewed" "$base/logout")" 401
             check "website token on a staff command (/announce)" "$(api -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' -H "Authorization: Bearer $token" -d '{"message":"ci"}' http://172.28.0.10:8080/announce)" 401
             echo "CORS for the website origin:"; api -s -o /dev/null -D - -X OPTIONS -H 'Origin: https://www.example.invalid' -H 'Access-Control-Request-Method: POST' "$base/login" | grep -i '^access-control-allow-origin' || { echo "FAIL no CORS header for the website"; exit 1; }
             echo "CORS for another origin (no header expected):"
