@@ -74,6 +74,7 @@ namespace Common
             std::uint32_t registerLimitPerHour = 5;
             std::uint32_t loginLimitPer15Min = 10;
             std::uint32_t passwordLimitPer15Min = 5;
+            bool breachedPasswordCheck = true;       // [Website] BreachedPasswordCheck: refuse new passwords found in Pwned Passwords
         };
 
         struct ClientSetup

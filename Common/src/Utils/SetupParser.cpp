@@ -12,6 +12,7 @@
 #include <mutex>
 #include <sstream>
 #include <algorithm>
+#include <cctype>
 #include <vector>
 #include <iostream>
 #include <cstdlib>
@@ -930,6 +931,22 @@ namespace Common
             readLimit("RegisterLimitPerHour", website.registerLimitPerHour);
             readLimit("LoginLimitPer15Min", website.loginLimitPer15Min);
             readLimit("PasswordLimitPer15Min", website.passwordLimitPer15Min);
+
+            // On unless switched off: a lab without internet access cannot reach the range API, the check then fails open anyway
+            if (section.contains("BreachedPasswordCheck"))
+            {
+                std::string value = trim(section["BreachedPasswordCheck"].as<std::string>());
+                std::transform(value.begin(), value.end(), value.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+                if (value == "off" || value == "false" || value == "0")
+                    website.breachedPasswordCheck = false;
+                else if (value != "on" && value != "true" && value != "1")
+                    ::Utils::Logger::log("[Website] BreachedPasswordCheck must be on or off, keeping on", ::Utils::LogType::Warning, "SetupParser::getWebsiteSetupImpl");
+            }
+            if (!website.breachedPasswordCheck)
+            {
+                ::Utils::Logger::log("[Website] BreachedPasswordCheck is off: new passwords are not checked against known breaches",
+                    ::Utils::LogType::Warning, "SetupParser::getWebsiteSetupImpl");
+            }
 
             return website;
         }
