@@ -3,6 +3,7 @@
 // Utils/AccountApi.h, the token in Utils/WebToken.h.
 
 #include "Network/Sessions/HttpSession.h"
+#include "Network/PwnedPasswords.h"
 #include "Network/Turnstile.h"
 #include "Utils/AccountApi.h"
 #include "Utils/WebToken.h"
@@ -203,6 +204,17 @@ namespace Main
             return lookup.account;
         }
 
+        // ASVS 6.2.12: a new password must not be one from a known breach. The website checks it too, but only here can the
+        // check not be skipped. When the range API cannot be reached the password is let through (logged in PwnedPasswords).
+        bool HttpSession::apiPasswordBreached(const std::string& password)
+        {
+            if (!Common::Utils::SetupParser::getInstance().getWebsiteSetup().breachedPasswordCheck)
+            {
+                return false;
+            }
+            return PwnedPasswords::check(password) == PwnedPasswords::Verdict::Breached;
+        }
+
         // Same rules as the game login for an account with 2FA on (AuthService::authorizeWithSecondFactor): a code is only looked
         // at after the password was right, a used code is refused, five wrong codes lock the second factor for 15 minutes.
         HttpSession::SecondFactor HttpSession::apiCheckSecondFactor(const WebAccount& account, const std::string& rawCode)
@@ -284,7 +296,7 @@ namespace Main
 
         /*
            POST /account/register (public) {"username","nickname","password","email","turnstile"}
-           201 {"account_id"} | 400 invalid_username invalid_nickname invalid_password invalid_email captcha_failed invalid_request
+           201 {"account_id"} | 400 invalid_username invalid_nickname invalid_password breached_password invalid_email captcha_failed invalid_request
            | 409 username_taken nickname_taken | 429 rate_limited | 500 server_error
         */
         void HttpSession::handleAccountRegister(std::string& responseBody, http::status& statusCode)
@@ -331,6 +343,12 @@ namespace Main
                 {
                     return fail(http::status::bad_request, "captcha_failed");
                 }
+            }
+
+            // after the captcha, so the range API is not called for requests a bot could send by the thousand
+            if (apiPasswordBreached(password))
+            {
+                return fail(http::status::bad_request, "breached_password");
             }
 
             const auto encryptedEmail = Common::Utils::encryptEmail(email, Common::Utils::SetupParser::getInstance().getGeneralSetup().emailSecret);
@@ -505,7 +523,7 @@ namespace Main
 
         /*
            POST /account/password (Bearer) {"current_password","new_password","totp"?}
-           200 {"token","expires_in"} | 400 invalid_password invalid_request | 401 unauthorized invalid_credentials totp_required
+           200 {"token","expires_in"} | 400 invalid_password breached_password invalid_request | 401 unauthorized invalid_credentials totp_required
            | 429 rate_limited | 500 server_error
            Every other website session of the account ends; the answer carries a new token for the one that made the change.
         */
@@ -568,6 +586,12 @@ namespace Main
                     apiEvent("password_change", "MEDIUM", account.accountId, "fail", "bad_2fa_code");
                     return apiError(responseBody, statusCode, http::status::unauthorized, "invalid_credentials");
                 }
+            }
+
+            if (apiPasswordBreached(next))
+            {
+                apiEvent("password_change", "LOW", account.accountId, "fail", "breached_password");
+                return apiError(responseBody, statusCode, http::status::bad_request, "breached_password");
             }
 
             const bool replaced = m_scheduler.immediatePersist(std::source_location::current(), &Main::Persistence::PersistentDatabase::changeWebPassword,

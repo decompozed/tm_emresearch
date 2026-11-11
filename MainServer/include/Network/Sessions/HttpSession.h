@@ -81,6 +81,7 @@ namespace Main
             bool apiParseObject(boost::json::object& out);
             std::optional<Common::Utils::WebToken::Claims> apiBearer();
             std::optional<Main::Structures::WebAccount> apiSessionAccount(std::string& responseBody, http::status& statusCode, const char* event);
+            bool apiPasswordBreached(const std::string& password);
             SecondFactor apiCheckSecondFactor(const Main::Structures::WebAccount& account, const std::string& rawCode);
             void handleBanCommand(std::string& responseBody, http::status& statusCode, const http::request<http::string_body>& m_request);
             void handleMute(std::string& responseBody, http::status& statusCode, const http::request<http::string_body>& m_request);
