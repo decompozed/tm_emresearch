@@ -66,6 +66,8 @@ namespace Main
             try { stmt->execute("ALTER TABLE Users ADD COLUMN IF NOT EXISTS HWIDSalt VARCHAR(128) NULL DEFAULT NULL"); } catch (...) {}
             try { stmt->execute("ALTER TABLE Users ADD COLUMN IF NOT EXISTS HWIDGraded VARCHAR(128) NULL DEFAULT NULL"); } catch (...) {}
             try { stmt->execute("ALTER TABLE Users ADD COLUMN IF NOT EXISTS HWIDGradedSalt VARCHAR(128) NULL DEFAULT NULL"); } catch (...) {}
+            // website session version (logout and password change end the tokens issued before)
+            try { stmt->execute("ALTER TABLE Users ADD COLUMN IF NOT EXISTS WebSessionVersion INT UNSIGNED NOT NULL DEFAULT 0"); } catch (...) {}
             // server settings (have_api tick rate): created once with the defaults, the next starts keep the values
             stmt->execute("CREATE TABLE IF NOT EXISTS ServerSettings (Name VARCHAR(64) NOT NULL PRIMARY KEY, Value INT NOT NULL)");
             stmt->execute("INSERT IGNORE INTO ServerSettings (Name, Value) VALUES ('TickRate', 10)");

@@ -126,6 +126,8 @@ namespace Main
 			Main::Structures::WebRegisterResult registerWebAccount(const std::string& username, const std::string& passwordHash, const std::string& nickname,
 				const std::string& encryptedEmail);
 			bool replacePasswordHash(std::uint32_t accountId, const std::string& oldHash, const std::string& newHash);
+			bool changeWebPassword(std::uint32_t accountId, const std::string& oldHash, const std::string& newHash);
+			bool endWebSessions(std::uint32_t accountId, std::uint32_t currentVersion);
 			std::optional<std::uint32_t> incrementFailed2fas(std::uint32_t accountId);
 			bool lockTwoFactor(std::uint32_t accountId, std::uint64_t untilEpoch);
 			void resetFailedLogins(std::uint32_t accountId);

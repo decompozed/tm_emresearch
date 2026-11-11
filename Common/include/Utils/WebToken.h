@@ -28,9 +28,10 @@ namespace Common
 			{
 				std::uint32_t accountId{};
 				std::int64_t role{};
+				std::uint32_t sessionVersion{};
 			};
 
-			inline std::string issue(std::uint32_t accountId, std::int64_t role, const std::string& key,
+			inline std::string issue(std::uint32_t accountId, std::int64_t role, std::uint32_t sessionVersion, const std::string& key,
 				std::chrono::system_clock::time_point now = std::chrono::system_clock::now())
 			{
 				return jwt::create()
@@ -39,13 +40,14 @@ namespace Common
 					.set_audience(std::string{ audience })
 					.set_subject(std::to_string(accountId))
 					.set_payload_claim("role", jwt::claim(picojson::value(role)))
+					.set_payload_claim("sv", jwt::claim(picojson::value(static_cast<std::int64_t>(sessionVersion))))
 					.set_issued_at(now)
 					.set_expires_at(now + lifetime)
 					.sign(jwt::algorithm::hs256{ key });
 			}
 
 			// A token for the website's endpoints: signature (current key, or the previous one during a rotation), expiry, and
-			// exactly this issuer, this audience, an exp claim, a numeric sub and an integer role. Anything else gives nothing,
+			// exactly this issuer, this audience, an exp claim, a numeric sub, an integer role and a session version. Anything else gives nothing,
 			// so a staff token (no website audience) is not accepted here either.
 			inline std::optional<Claims> verify(const std::string& token, const std::string& currentKey, const std::string& previousKey)
 			{
@@ -67,7 +69,7 @@ namespace Common
 					{
 						return std::nullopt;
 					}
-					if (!decoded.has_expires_at() || !decoded.has_subject() || !decoded.has_payload_claim("role"))
+					if (!decoded.has_expires_at() || !decoded.has_subject() || !decoded.has_payload_claim("role") || !decoded.has_payload_claim("sv"))
 					{
 						return std::nullopt;
 					}
@@ -83,9 +85,16 @@ namespace Common
 						return std::nullopt;
 					}
 
+					const std::int64_t version = decoded.get_payload_claim("sv").as_integer();
+					if (version < 0 || version > 0xFFFFFFFFll)
+					{
+						return std::nullopt;
+					}
+
 					Claims claims;
 					claims.accountId = static_cast<std::uint32_t>(id);
 					claims.role = decoded.get_payload_claim("role").as_integer();
+					claims.sessionVersion = static_cast<std::uint32_t>(version);
 					return claims;
 				}
 				catch (const std::exception&)

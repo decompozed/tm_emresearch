@@ -27,6 +27,7 @@ namespace Main
 			std::int64_t wins{};
 			std::int64_t loses{};
 			std::int64_t playtime{};
+			std::uint32_t webSessionVersion{}; // moves on at logout and password change, website tokens carry it as "sv"
 		};
 
 		struct WebAccountLookup

@@ -73,12 +73,14 @@ namespace Main
             void handleAccountLogin(std::string& responseBody, http::status& statusCode);
             void handleAccountMe(std::string& responseBody, http::status& statusCode);
             void handleAccountPassword(std::string& responseBody, http::status& statusCode);
+            void handleAccountLogout(std::string& responseBody, http::status& statusCode);
             std::string clientIp() const;
             void apiError(std::string& responseBody, http::status& statusCode, http::status status, const char* code);
             void apiEvent(const char* event, const char* severity, std::uint32_t accountId, const char* result, const std::string& reason);
             bool apiRateLimited(Common::Utils::AccountApi::RateLimiter& limiter, const char* endpoint, std::string& responseBody, http::status& statusCode);
             bool apiParseObject(boost::json::object& out);
             std::optional<Common::Utils::WebToken::Claims> apiBearer();
+            std::optional<Main::Structures::WebAccount> apiSessionAccount(std::string& responseBody, http::status& statusCode, const char* event);
             SecondFactor apiCheckSecondFactor(const Main::Structures::WebAccount& account, const std::string& rawCode);
             void handleBanCommand(std::string& responseBody, http::status& statusCode, const http::request<http::string_body>& m_request);
             void handleMute(std::string& responseBody, http::status& statusCode, const http::request<http::string_body>& m_request);

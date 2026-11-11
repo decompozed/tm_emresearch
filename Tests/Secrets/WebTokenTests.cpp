@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <chrono>
+#include <optional>
 #include <string>
 
 #include "Utils/WebToken.h"
@@ -43,7 +44,7 @@ namespace
 TEST(WebToken, IssuedTokenHasTheContractClaims)
 {
 	const auto now = std::chrono::system_clock::now();
-	const auto decoded = jwt::decode(WebToken::issue(42, 1, key, now));
+	const auto decoded = jwt::decode(WebToken::issue(42, 1, 0, key, now));
 
 	EXPECT_EQ(decoded.get_algorithm(), "HS256");
 	EXPECT_EQ(decoded.get_issuer(), "toymayhem-api");
@@ -51,6 +52,7 @@ TEST(WebToken, IssuedTokenHasTheContractClaims)
 	EXPECT_EQ(*decoded.get_audience().begin(), "toymayhem-web");
 	EXPECT_EQ(decoded.get_subject(), "42");
 	EXPECT_EQ(decoded.get_payload_claim("role").as_integer(), 1);
+	EXPECT_EQ(decoded.get_payload_claim("sv").as_integer(), 0);
 	const auto iat = std::chrono::duration_cast<std::chrono::seconds>(decoded.get_issued_at().time_since_epoch()).count();
 	const auto exp = std::chrono::duration_cast<std::chrono::seconds>(decoded.get_expires_at().time_since_epoch()).count();
 	EXPECT_EQ(exp - iat, 3600);
@@ -58,24 +60,25 @@ TEST(WebToken, IssuedTokenHasTheContractClaims)
 
 TEST(WebToken, RoundTripGivesAccountIdAndRole)
 {
-	const auto claims = WebToken::verify(WebToken::issue(1234, 1, key), key, "");
+	const auto claims = WebToken::verify(WebToken::issue(1234, 1, 17, key), key, "");
 	ASSERT_TRUE(claims.has_value());
 	EXPECT_EQ(claims->accountId, 1234u);
 	EXPECT_EQ(claims->role, 1);
+	EXPECT_EQ(claims->sessionVersion, 17u);
 }
 
 TEST(WebToken, PreviousKeyIsAcceptedDuringARotation)
 {
-	const std::string token = WebToken::issue(7, 1, oldKey);
+	const std::string token = WebToken::issue(7, 1, 0, oldKey);
 	EXPECT_TRUE(WebToken::verify(token, key, oldKey).has_value());
 	EXPECT_FALSE(WebToken::verify(token, key, "").has_value());
 }
 
 TEST(WebToken, WrongKeyAndTamperingAreRefused)
 {
-	EXPECT_FALSE(WebToken::verify(WebToken::issue(7, 1, attackerKey), key, oldKey).has_value());
+	EXPECT_FALSE(WebToken::verify(WebToken::issue(7, 1, 0, attackerKey), key, oldKey).has_value());
 
-	std::string token = WebToken::issue(7, 1, key);
+	std::string token = WebToken::issue(7, 1, 0, key);
 	// a character inside the signature: the last one carries only 4 bits, and a change in its 2 padding bits decodes the same
 	const std::size_t at = token.rfind('.') + 10;
 	token[at] = token[at] == 'A' ? 'B' : 'A';
@@ -87,7 +90,7 @@ TEST(WebToken, WrongKeyAndTamperingAreRefused)
 TEST(WebToken, ExpiredTokenIsRefused)
 {
 	const auto twoHoursAgo = std::chrono::system_clock::now() - std::chrono::hours(2);
-	EXPECT_FALSE(WebToken::verify(WebToken::issue(7, 1, key, twoHoursAgo), key, "").has_value());
+	EXPECT_FALSE(WebToken::verify(WebToken::issue(7, 1, 0, key, twoHoursAgo), key, "").has_value());
 }
 
 TEST(WebToken, StaffTokenIsNotAWebsiteToken)
@@ -100,7 +103,8 @@ TEST(WebToken, TokenForAnotherIssuerOrAudienceIsRefused)
 	const auto now = std::chrono::system_clock::now();
 	const auto make = [&](const std::string& iss, const std::string& aud, bool withExp, const std::string& sub) {
 		auto builder = jwt::create().set_issuer(iss).set_audience(aud).set_subject(sub)
-			.set_payload_claim("role", jwt::claim(picojson::value(static_cast<std::int64_t>(1)))).set_issued_at(now);
+			.set_payload_claim("role", jwt::claim(picojson::value(static_cast<std::int64_t>(1))))
+			.set_payload_claim("sv", jwt::claim(picojson::value(static_cast<std::int64_t>(0)))).set_issued_at(now);
 		if (withExp)
 		{
 			builder.set_expires_at(now + std::chrono::hours(1));
@@ -131,7 +135,7 @@ TEST(WebToken, StaffEndpointsRefuseWebsiteTokensWhateverTheRole)
 {
 	for (const int role : { 1, 3, 4, 7, 8, 9, 1000 })
 	{
-		EXPECT_FALSE(staffAccepts(WebToken::issue(1, role, key))) << "role " << role;
+		EXPECT_FALSE(staffAccepts(WebToken::issue(1, role, 0, key))) << "role " << role;
 	}
 }
 
@@ -152,5 +156,26 @@ TEST(WebToken, StaffEndpointsRefuseTheWebsiteAudienceInAnArray)
 
 TEST(WebToken, StaffEndpointsDoNotAcceptAForgedWebsiteTokenEither)
 {
-	EXPECT_FALSE(staffAccepts(WebToken::issue(1, 9, attackerKey)));
+	EXPECT_FALSE(staffAccepts(WebToken::issue(1, 9, 0, attackerKey)));
+}
+
+// A token from before session versions (no sv), or with a version that is not a 32-bit unsigned number, is refused
+TEST(WebToken, TokenWithoutAUsableSessionVersionIsRefused)
+{
+	const auto now = std::chrono::system_clock::now();
+	const auto make = [&](std::optional<std::int64_t> version) {
+		auto builder = jwt::create().set_issuer("toymayhem-api").set_audience(std::string{ "toymayhem-web" }).set_subject("5")
+			.set_payload_claim("role", jwt::claim(picojson::value(static_cast<std::int64_t>(1)))).set_issued_at(now).set_expires_at(now + std::chrono::hours(1));
+		if (version)
+		{
+			builder.set_payload_claim("sv", jwt::claim(picojson::value(*version)));
+		}
+		return builder.sign(jwt::algorithm::hs256{ key });
+	};
+
+	EXPECT_TRUE(WebToken::verify(make(4), key, "").has_value());
+	EXPECT_TRUE(WebToken::verify(make(0xFFFFFFFFll), key, "").has_value());
+	EXPECT_FALSE(WebToken::verify(make(std::nullopt), key, "").has_value()) << "issued before logout could end tokens";
+	EXPECT_FALSE(WebToken::verify(make(-1), key, "").has_value());
+	EXPECT_FALSE(WebToken::verify(make(0x100000000ll), key, "").has_value());
 }

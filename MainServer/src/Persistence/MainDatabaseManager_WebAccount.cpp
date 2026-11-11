@@ -34,7 +34,7 @@ namespace Main
                 try
                 {
                     const std::string query = std::string("SELECT AccountID, Username, Nickname, Password, Secret, SuspendedUntil, Grade, TwoFactorEnabled, "
-                        "TotpLastStep, TwoFactorLockedUntil, Level, Kills, Deaths, Wins, Loses, Playtime FROM Users WHERE ") + whereClause;
+                        "TotpLastStep, TwoFactorLockedUntil, Level, Kills, Deaths, Wins, Loses, Playtime, WebSessionVersion FROM Users WHERE ") + whereClause;
                     std::unique_ptr<sql::PreparedStatement> stmt(con->prepareStatement(query));
                     if (text)
                     {
@@ -67,6 +67,7 @@ namespace Main
                     a.wins = res->getInt64("Wins");
                     a.loses = res->getInt64("Loses");
                     a.playtime = res->getInt64("Playtime");
+                    a.webSessionVersion = res->getUInt("WebSessionVersion");
                     result.status = Main::Structures::WebAccountLookup::Status::Found;
                 }
                 catch (const sql::SQLException& e)
@@ -136,6 +137,45 @@ namespace Main
             catch (const sql::SQLException& e)
             {
                 ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::replacePasswordHash");
+                return false;
+            }
+        }
+
+        // A password change from the website: same compare-and-set as above, and in the same statement the session version
+        // moves on, so every website token issued before the change stops working
+        bool PersistentDatabase::changeWebPassword(std::uint32_t accountId, const std::string& oldHash, const std::string& newHash)
+        {
+            try
+            {
+                std::unique_ptr<sql::PreparedStatement> stmt(m_con->prepareStatement(
+                    "UPDATE Users SET Password = ?, WebSessionVersion = WebSessionVersion + 1 WHERE AccountID = ? AND Password = ?"));
+                stmt->setString(1, newHash);
+                stmt->setUInt(2, accountId);
+                stmt->setString(3, oldHash);
+                return stmt->executeUpdate() > 0;
+            }
+            catch (const sql::SQLException& e)
+            {
+                ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::changeWebPassword");
+                return false;
+            }
+        }
+
+        // Logout: ends every website session of the account. Only from the version the token carried, so a replayed logout
+        // with an old token changes nothing.
+        bool PersistentDatabase::endWebSessions(std::uint32_t accountId, std::uint32_t currentVersion)
+        {
+            try
+            {
+                std::unique_ptr<sql::PreparedStatement> stmt(m_con->prepareStatement(
+                    "UPDATE Users SET WebSessionVersion = WebSessionVersion + 1 WHERE AccountID = ? AND WebSessionVersion = ?"));
+                stmt->setUInt(1, accountId);
+                stmt->setUInt(2, currentVersion);
+                return stmt->executeUpdate() > 0;
+            }
+            catch (const sql::SQLException& e)
+            {
+                ::Utils::Logger::log("MariaDB exception: " + std::string(e.what()), Utils::LogType::Error, "PersistentDatabase::endWebSessions");
                 return false;
             }
         }

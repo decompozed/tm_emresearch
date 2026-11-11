@@ -1,5 +1,5 @@
-// The player account API of the website: GET /account/status, POST /account/register, POST /account/login, GET /account/me
-// and POST /account/password. The rules (names, passwords, rate limits, which address is the client) are in
+// The player account API of the website: GET /account/status, POST /account/register, POST /account/login, GET /account/me,
+// POST /account/password and POST /account/logout. The rules (names, passwords, rate limits, which address is the client) are in
 // Utils/AccountApi.h, the token in Utils/WebToken.h.
 
 #include "Network/Sessions/HttpSession.h"
@@ -168,6 +168,39 @@ namespace Main
             }
             const auto& website = Common::Utils::SetupParser::getInstance().getWebsiteSetup();
             return Common::Utils::WebToken::verify(header.substr(scheme.size()), website.jwtToken, website.jwtTokenPrevious);
+        }
+
+        // The account behind the bearer token, while that token is still current: signature, expiry and claims (apiBearer),
+        // then the session version. A token from before a logout or a password change is refused and logged as a reuse,
+        // because a valid signature on an ended session means someone kept a token they should no longer have.
+        std::optional<WebAccount> HttpSession::apiSessionAccount(std::string& responseBody, http::status& statusCode, const char* event)
+        {
+            const auto claims = apiBearer();
+            if (!claims)
+            {
+                apiEvent(event, "LOW", 0, "denied", "no_valid_token");
+                apiError(responseBody, statusCode, http::status::unauthorized, "unauthorized");
+                return std::nullopt;
+            }
+            const WebAccountLookup lookup = m_scheduler.immediatePersist(std::source_location::current(), &Main::Persistence::PersistentDatabase::getWebAccountById, claims->accountId);
+            if (lookup.status == WebAccountLookup::Status::Error)
+            {
+                apiError(responseBody, statusCode, http::status::internal_server_error, "server_error");
+                return std::nullopt;
+            }
+            if (lookup.status == WebAccountLookup::Status::NotFound)
+            {
+                apiEvent(event, "LOW", claims->accountId, "denied", "unknown_account");
+                apiError(responseBody, statusCode, http::status::unauthorized, "unauthorized");
+                return std::nullopt;
+            }
+            if (lookup.account.webSessionVersion != claims->sessionVersion)
+            {
+                apiEvent("authn_token_reuse", "MEDIUM", claims->accountId, "denied", event);
+                apiError(responseBody, statusCode, http::status::unauthorized, "unauthorized");
+                return std::nullopt;
+            }
+            return lookup.account;
         }
 
         // Same rules as the game login for an account with 2FA on (AuthService::authorizeWithSecondFactor): a code is only looked
@@ -434,7 +467,7 @@ namespace Main
             accountJson["grade"] = account.grade;
             accountJson["twofa"] = account.twoFactorEnabled;
             boost::json::object out;
-            out["token"] = Common::Utils::WebToken::issue(account.accountId, account.grade, website.jwtToken);
+            out["token"] = Common::Utils::WebToken::issue(account.accountId, account.grade, account.webSessionVersion, website.jwtToken);
             out["expires_in"] = Common::Utils::WebToken::lifetime.count();
             out["account"] = std::move(accountJson);
             apiEvent("authn_ok", "LOW", account.accountId, "ok", "web_login");
@@ -448,21 +481,12 @@ namespace Main
         */
         void HttpSession::handleAccountMe(std::string& responseBody, http::status& statusCode)
         {
-            const auto claims = apiBearer();
-            if (!claims)
+            const auto account = apiSessionAccount(responseBody, statusCode, "account_read");
+            if (!account)
             {
-                return apiError(responseBody, statusCode, http::status::unauthorized, "unauthorized");
+                return;
             }
-            const WebAccountLookup lookup = m_scheduler.immediatePersist(std::source_location::current(), &Main::Persistence::PersistentDatabase::getWebAccountById, claims->accountId);
-            if (lookup.status == WebAccountLookup::Status::NotFound)
-            {
-                return apiError(responseBody, statusCode, http::status::unauthorized, "unauthorized");
-            }
-            if (lookup.status == WebAccountLookup::Status::Error)
-            {
-                return apiError(responseBody, statusCode, http::status::internal_server_error, "server_error");
-            }
-            const WebAccount& a = lookup.account;
+            const WebAccount& a = *account;
             boost::json::object out;
             out["id"] = a.accountId;
             out["username"] = a.username;
@@ -481,7 +505,9 @@ namespace Main
 
         /*
            POST /account/password (Bearer) {"current_password","new_password","totp"?}
-           204 | 400 invalid_password invalid_request | 401 unauthorized invalid_credentials totp_required | 429 rate_limited | 500 server_error
+           200 {"token","expires_in"} | 400 invalid_password invalid_request | 401 unauthorized invalid_credentials totp_required
+           | 429 rate_limited | 500 server_error
+           Every other website session of the account ends; the answer carries a new token for the one that made the change.
         */
         void HttpSession::handleAccountPassword(std::string& responseBody, http::status& statusCode)
         {
@@ -489,41 +515,29 @@ namespace Main
             {
                 return;
             }
-            const auto claims = apiBearer();
-            if (!claims)
+            const auto session = apiSessionAccount(responseBody, statusCode, "password_change");
+            if (!session)
             {
-                apiEvent("password_change", "LOW", 0, "denied", "no_valid_token");
-                return apiError(responseBody, statusCode, http::status::unauthorized, "unauthorized");
+                return;
             }
+            const WebAccount& account = *session;
 
             boost::json::object body;
             std::string current, next, totp;
             if (!apiParseObject(body) || !getString(body, "current_password", current) || current.size() > Api::maxPasswordLength * 4)
             {
-                apiEvent("password_change", "LOW", claims->accountId, "fail", "invalid_request");
+                apiEvent("password_change", "LOW", account.accountId, "fail", "invalid_request");
                 return apiError(responseBody, statusCode, http::status::bad_request, "invalid_request");
             }
             if (const auto* value = field(body, "totp"))
             {
                 if (!value->is_string() || value->as_string().size() > 64)
                 {
-                    apiEvent("password_change", "LOW", claims->accountId, "fail", "invalid_request");
+                    apiEvent("password_change", "LOW", account.accountId, "fail", "invalid_request");
                     return apiError(responseBody, statusCode, http::status::bad_request, "invalid_request");
                 }
                 totp = std::string(value->as_string());
             }
-
-            const WebAccountLookup lookup = m_scheduler.immediatePersist(std::source_location::current(), &Main::Persistence::PersistentDatabase::getWebAccountById, claims->accountId);
-            if (lookup.status == WebAccountLookup::Status::NotFound)
-            {
-                apiEvent("password_change", "LOW", claims->accountId, "denied", "unknown_account");
-                return apiError(responseBody, statusCode, http::status::unauthorized, "unauthorized");
-            }
-            if (lookup.status == WebAccountLookup::Status::Error)
-            {
-                return apiError(responseBody, statusCode, http::status::internal_server_error, "server_error");
-            }
-            const WebAccount& account = lookup.account;
 
             if (!getString(body, "new_password", next) || !Api::validPassword(next, account.username))
             {
@@ -556,7 +570,7 @@ namespace Main
                 }
             }
 
-            const bool replaced = m_scheduler.immediatePersist(std::source_location::current(), &Main::Persistence::PersistentDatabase::replacePasswordHash,
+            const bool replaced = m_scheduler.immediatePersist(std::source_location::current(), &Main::Persistence::PersistentDatabase::changeWebPassword,
                 account.accountId, account.passwordHash, Common::Utils::hashPassword(next));
             if (!replaced)
             {
@@ -564,6 +578,39 @@ namespace Main
                 return apiError(responseBody, statusCode, http::status::internal_server_error, "server_error");
             }
             apiEvent("password_change", "MEDIUM", account.accountId, "ok", "changed");
+            apiEvent("authn_token_revoked", "LOW", account.accountId, "ok", "password_change");
+
+            // read back: a logout may have moved the version on at the same moment
+            const WebAccountLookup changed = m_scheduler.immediatePersist(std::source_location::current(), &Main::Persistence::PersistentDatabase::getWebAccountById, account.accountId);
+            if (changed.status != WebAccountLookup::Status::Found)
+            {
+                return apiError(responseBody, statusCode, http::status::internal_server_error, "server_error");
+            }
+            const auto& website = Common::Utils::SetupParser::getInstance().getWebsiteSetup();
+            boost::json::object out;
+            out["token"] = Common::Utils::WebToken::issue(changed.account.accountId, changed.account.grade, changed.account.webSessionVersion, website.jwtToken);
+            out["expires_in"] = Common::Utils::WebToken::lifetime.count();
+            statusCode = http::status::ok;
+            responseBody = boost::json::serialize(out);
+        }
+
+        /*
+           POST /account/logout (Bearer)
+           204 | 401 unauthorized | 500 server_error
+           Ends every website session of the account, not only this one: the tokens are not stored, so they can only be
+           ended together. The game client is not affected.
+        */
+        void HttpSession::handleAccountLogout(std::string& responseBody, http::status& statusCode)
+        {
+            const auto account = apiSessionAccount(responseBody, statusCode, "logout");
+            if (!account)
+            {
+                return;
+            }
+            const bool ended = m_scheduler.immediatePersist(std::source_location::current(), &Main::Persistence::PersistentDatabase::endWebSessions,
+                account->accountId, account->webSessionVersion);
+            // not ended: another request moved the version on first, so this token is over as well
+            apiEvent("authn_token_revoked", "LOW", account->accountId, "ok", ended ? "logout" : "logout_already_ended");
             statusCode = http::status::no_content;
             responseBody.clear();
         }
@@ -586,6 +633,7 @@ namespace Main
                 { "/account/register", http::verb::post, &HttpSession::handleAccountRegister },
                 { "/account/login", http::verb::post, &HttpSession::handleAccountLogin },
                 { "/account/password", http::verb::post, &HttpSession::handleAccountPassword },
+                { "/account/logout", http::verb::post, &HttpSession::handleAccountLogout },
             };
 
             bool pathKnown = false;
