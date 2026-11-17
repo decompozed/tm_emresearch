@@ -7,7 +7,7 @@
 set -euo pipefail
 
 base=/opt/toymayhem
-registry_image=ghcr.io/macrovolts/tm_emulator
+registry_image=ghcr.io/decompozed/tm_emulator
 
 cmd=${SSH_ORIGINAL_COMMAND:-}
 if [[ ! "$cmd" =~ ^deploy\ (sha-[0-9a-f]{40})$ ]]; then

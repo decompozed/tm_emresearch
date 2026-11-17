@@ -15,7 +15,7 @@
 name: toymayhem
 
 x-game: &game
-  image: ${TM_IMAGE:-ghcr.io/macrovolts/tm_emulator:main}
+  image: ${TM_IMAGE:-ghcr.io/decompozed/tm_emulator:main}
   restart: unless-stopped
   user: "10001:10001"
   read_only: true
@@ -112,7 +112,7 @@ services:
       options: { max-size: 10m, max-file: "3" }
 
   netns:
-    image: ${TM_IMAGE:-ghcr.io/macrovolts/tm_emulator:main}
+    image: ${TM_IMAGE:-ghcr.io/decompozed/tm_emulator:main}
     entrypoint: ["/usr/bin/sleep", "infinity"]
     init: true
     restart: unless-stopped
