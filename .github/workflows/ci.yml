@@ -275,6 +275,40 @@ jobs:
             grype-repo.json
             scan-summary.txt
 
+  license-check:
+    name: License gate on the SBOM
+    runs-on: ubuntu-24.04
+    needs: build-test
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: sbom-and-hardening
+
+      - name: Checker tests
+        run: python3 Tools/tests/test_license_check.py
+
+      - name: Check every package against the allow list
+        run: |
+          status=0
+          python3 Tools/sbom/check_licenses.py --sbom sbom.spdx.json --allow Tools/sbom/allowed-licenses.txt             --overrides Tools/sbom/license-overrides.json --report license-check.json --table license-check.md || status=$?
+          cat license-check.md >> "$GITHUB_STEP_SUMMARY"
+          exit "$status"
+
+      - name: Keep the report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: license-check
+          path: |
+            license-check.json
+            license-check.md
+          if-no-files-found: ignore
+
   host-scripts:
     name: Host scripts (shellcheck, dry run on Ubuntu 24.04)
     runs-on: ubuntu-24.04
