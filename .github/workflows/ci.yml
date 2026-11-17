@@ -119,7 +119,7 @@ jobs:
 
       - name: Build the fuzz targets
         run: |
-          FLAGS=(-std=c++2b -g -O1 -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=undefined -IExternalLibraries -ICommon -ICommon/include -ICommon/include/Utils)
+          FLAGS=(-std=c++2b -g -O1 "-fsanitize=fuzzer,address,undefined" -fno-sanitize-recover=undefined -IExternalLibraries -ICommon -ICommon/include -ICommon/include/Utils)
           clang++-18 "${FLAGS[@]}" Tools/fuzz/packet_fuzz.cpp Common/src/Protocol/TcpHeader.cpp -o packet_fuzz
           clang++-18 "${FLAGS[@]}" Tools/fuzz/text_fuzz.cpp -lcryptopp -o text_fuzz
 
