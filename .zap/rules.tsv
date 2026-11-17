@@ -1,0 +1,2 @@
+# ZAP API scan rules: <rule id><TAB><IGNORE|INFO|WARN|FAIL><TAB><reason>. A rule that is not listed keeps its default level,
+# and a WARN or FAIL fails the pipeline. Every entry needs a reason.

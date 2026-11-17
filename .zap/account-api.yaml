@@ -1,0 +1,233 @@
+openapi: 3.0.3
+info:
+  title: Account API of the MainServer
+  version: "1.0"
+  description: >
+    The player account API under /account/, served by MainServer on port 8080 (HttpSession_Account.cpp). The listener also
+    serves staff commands (/ban, /announce, ...); they are not part of this description and are not reachable from the
+    internet (the tunnel only forwards /account/). Bodies are JSON of at most 4096 bytes (413 payload_too_large above that).
+    Every error body is {"error": "<code>"}. A path that is not listed answers 404 not_found, a listed path with another
+    method answers 405 method_not_allowed.
+servers:
+  - url: http://172.28.0.10:8080
+    description: the address MainServer listens on inside the container network namespace (the value of TM_APP_IP)
+tags:
+  - name: public
+  - name: session
+paths:
+  /account/status:
+    get:
+      tags: [public]
+      summary: Players online and which servers answer
+      security: []
+      responses:
+        "200":
+          description: Status, the server probes are cached for 5 seconds
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [online, servers]
+                properties:
+                  online: { type: integer, minimum: 0 }
+                  servers:
+                    type: object
+                    required: [auth, main, cast]
+                    properties:
+                      auth: { type: boolean }
+                      main: { type: boolean }
+                      cast: { type: boolean }
+  /account/register:
+    post:
+      tags: [public]
+      summary: Create a player account
+      description: Rate limited per client address (default 5 per hour). The Turnstile token is checked when a secret is configured.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, nickname, password, email]
+              properties:
+                username: { type: string, pattern: '^[A-Za-z0-9_]{3,16}$', example: zapplayer1 }
+                nickname: { type: string, pattern: '^[A-Za-z0-9_]{3,16}$', example: zapnick1 }
+                password:
+                  type: string
+                  minLength: 10
+                  maxLength: 128
+                  description: Not equal to the username (case-insensitive), no NUL, not in a known breach (Pwned Passwords range check)
+                  example: Zq9-vT3r-mE7xKp2
+                email: { type: string, maxLength: 254, example: zapplayer1@example.invalid }
+                turnstile: { type: string, maxLength: 2048, description: Cloudflare Turnstile token, example: XXXX.DUMMY.TOKEN.XXXX }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [account_id]
+                properties:
+                  account_id: { type: integer, minimum: 1 }
+        "400": { $ref: '#/components/responses/RegisterInvalid' }
+        "409": { $ref: '#/components/responses/Taken' }
+        "413": { $ref: '#/components/responses/TooLarge' }
+        "429": { $ref: '#/components/responses/RateLimited' }
+        "500": { $ref: '#/components/responses/ServerError' }
+  /account/login:
+    post:
+      tags: [public]
+      summary: Sign in with username and password, returns a bearer token
+      description: Rate limited per client address (default 10 per 15 minutes). An unknown username and a wrong password give the same answer. Staff accounts (grade 3 and up) are refused here.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password]
+              properties:
+                username: { type: string, minLength: 1, maxLength: 64, example: zapplayer1 }
+                password: { type: string, minLength: 1, maxLength: 512, example: Zq9-vT3r-mE7xKp2 }
+                totp: { type: string, maxLength: 64, description: One time code or recovery code, needed when the account has 2FA on }
+      responses:
+        "200":
+          description: Signed in
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [token, expires_in, account]
+                properties:
+                  token: { type: string }
+                  expires_in: { type: integer, description: seconds, example: 3600 }
+                  account:
+                    type: object
+                    required: [id, username, nickname, grade, twofa]
+                    properties:
+                      id: { type: integer }
+                      username: { type: string }
+                      nickname: { type: string }
+                      grade: { type: integer }
+                      twofa: { type: boolean }
+        "400":
+          description: invalid_request
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        "401":
+          description: invalid_credentials, or totp_required when the account has 2FA and no code was sent
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        "403":
+          description: suspended
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        "413": { $ref: '#/components/responses/TooLarge' }
+        "429": { $ref: '#/components/responses/RateLimited' }
+        "500": { $ref: '#/components/responses/ServerError' }
+  /account/me:
+    get:
+      tags: [session]
+      summary: The signed-in account and its statistics
+      security: [{ bearerAuth: [] }]
+      responses:
+        "200":
+          description: The account
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, username, nickname, grade, twofa, level, kills, deaths, wins, loses, playtime]
+                properties:
+                  id: { type: integer }
+                  username: { type: string }
+                  nickname: { type: string }
+                  grade: { type: integer }
+                  twofa: { type: boolean }
+                  level: { type: integer }
+                  kills: { type: integer }
+                  deaths: { type: integer }
+                  wins: { type: integer }
+                  loses: { type: integer }
+                  playtime: { type: integer }
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "500": { $ref: '#/components/responses/ServerError' }
+  /account/password:
+    post:
+      tags: [session]
+      summary: Change the password, ends every other website session of the account
+      description: Rate limited per client address (default 5 per 15 minutes). The answer carries a new token for the session that made the change.
+      security: [{ bearerAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [current_password, new_password]
+              properties:
+                current_password: { type: string, maxLength: 512, example: Zq9-vT3r-mE7xKp2 }
+                new_password: { type: string, minLength: 10, maxLength: 128, example: Hj4-wN8c-Ry2uLb6 }
+                totp: { type: string, maxLength: 64 }
+      responses:
+        "200":
+          description: Changed
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [token, expires_in]
+                properties:
+                  token: { type: string }
+                  expires_in: { type: integer, example: 3600 }
+        "400":
+          description: invalid_request, invalid_password or breached_password
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        "401":
+          description: unauthorized, invalid_credentials or totp_required
+          content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+        "413": { $ref: '#/components/responses/TooLarge' }
+        "429": { $ref: '#/components/responses/RateLimited' }
+        "500": { $ref: '#/components/responses/ServerError' }
+  /account/logout:
+    post:
+      tags: [session]
+      summary: End every website session of the account
+      description: The tokens are not stored, so they can only be ended together. The game client is not affected.
+      security: [{ bearerAuth: [] }]
+      responses:
+        "204":
+          description: Ended
+        "401": { $ref: '#/components/responses/Unauthorized' }
+        "500": { $ref: '#/components/responses/ServerError' }
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: The token from /account/login or /account/password. Signed, 1 hour, void after a logout or a password change.
+  schemas:
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string, example: invalid_request }
+  responses:
+    RegisterInvalid:
+      description: invalid_request, invalid_username, invalid_nickname, invalid_password, breached_password, invalid_email or captcha_failed
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    Taken:
+      description: username_taken or nickname_taken
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    Unauthorized:
+      description: unauthorized (no token, a bad token, or a token from before a logout or password change)
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    TooLarge:
+      description: payload_too_large (more than 4096 bytes of body)
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    RateLimited:
+      description: rate_limited
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }
+    ServerError:
+      description: server_error
+      content: { application/json: { schema: { $ref: '#/components/schemas/Error' } } }

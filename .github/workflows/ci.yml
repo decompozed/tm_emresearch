@@ -427,6 +427,8 @@ jobs:
           printf '1x0000000000000000000000000000000AA' > "$RUNNER_TEMP/turnstile-test-secret"
           deploy/scripts/make-secrets.sh --dir "$TM_SECRETS_DIR" --turnstile-secret-file "$RUNNER_TEMP/turnstile-test-secret" > /dev/null
           export TM_REGISTER_LIMIT_PER_HOUR=3
+          # the next steps (API scan, tear down) run docker compose against the same stack
+          printf '%s\n' "TM_DOMAIN=$TM_DOMAIN" "TM_IMAGE=$TM_IMAGE" "TM_SECRETS_DIR=$TM_SECRETS_DIR" "TM_LOG_HOST_DIR=$TM_LOG_HOST_DIR" "TM_SCHEMA_SQL=$TM_SCHEMA_SQL" "TM_WORK=$work" >> "$GITHUB_ENV"
           cd deploy
           docker compose config --quiet
           if ! docker compose up --detach --wait --wait-timeout 420 db netns auth main cast; then
@@ -527,7 +529,97 @@ jobs:
           timeout 120 bash -c 'until [ "$(docker inspect -f "{{.State.Health.Status}}" "$(docker compose ps -q main)")" = healthy ]; do sleep 3; done'
           docker compose ps | tee -a ../smoke-test.txt
           docker compose logs --no-color --tail 40 | tee ../smoke-logs.txt > /dev/null
-          docker compose down --volumes
+
+      # The stack of the smoke test is still running. The scan reaches the API the way the tunnel does: from inside the
+      # network namespace of the netns container. The rate limits were tested above, so main is restarted with higher ones,
+      # otherwise the scan would only ever see the 429 answer.
+      - name: Account API scan (OWASP ZAP, OpenAPI description in .zap/account-api.yaml)
+        working-directory: deploy
+        timeout-minutes: 40
+        env:
+          ZAP_IMAGE: ghcr.io/zaproxy/zaproxy:2.17.0@sha256:9624669db72f54d86c4b46a7064518bd9bf79d8c61a4c31befa9923489f328af
+        run: |
+          set -euo pipefail
+          TM_REGISTER_LIMIT_PER_HOUR=9999 TM_LOGIN_LIMIT_PER_15MIN=9999 TM_PASSWORD_LIMIT_PER_15MIN=9999 \
+            docker compose up --detach --wait --wait-timeout 180 --force-recreate --no-deps main
+          netns=$(docker compose ps -q netns)
+          api() { docker run --rm --network "container:$netns" curlimages/curl:8.11.1@sha256:c1fe1679c34d9784c1b0d1e5f62ac0a79fca01fb6377cdd33e90473c6f9f9a69 -sS -m 30 "$@"; }
+          base=http://172.28.0.10:8080/account
+          # Two throwaway accounts. /account/logout ends the session of the account, so it is scanned on its own with the
+          # second one; the first keeps its token for every other endpoint.
+          token_for() {
+            local user=$1 pass
+            pass=$(openssl rand -hex 12)
+            api -o /dev/null -f -H 'Content-Type: application/json' -H 'CF-Connecting-IP: 198.51.100.50' \
+              -d "$(printf '{"username":"%s","nickname":"%s","password":"%s","email":"%s@example.invalid","turnstile":"XXXX.DUMMY.TOKEN.XXXX"}' "$user" "$user" "$pass" "$user")" "$base/register"
+            api -f -H 'Content-Type: application/json' -H 'CF-Connecting-IP: 198.51.100.50' \
+              -d "$(printf '{"username":"%s","password":"%s"}' "$user" "$pass")" "$base/login" | jq -r .token
+          }
+          token_main=$(token_for zapscan1)
+          token_logout=$(token_for zapscan2)
+          mkdir -p zap/api zap/logout
+          chmod 777 zap/api zap/logout
+          cp ../.zap/rules.tsv ../.zap/hooks.py zap/api/
+          cp ../.zap/rules.tsv ../.zap/hooks.py zap/logout/
+          yq 'del(.paths["/account/logout"])' ../.zap/account-api.yaml > zap/api/openapi.yaml
+          yq '.paths |= with_entries(select(.key == "/account/logout"))' ../.zap/account-api.yaml > zap/logout/openapi.yaml
+          status=0
+          for scan in api logout; do
+            if [ "$scan" = api ]; then ZAP_ACCOUNT_TOKEN=$token_main; else ZAP_ACCOUNT_TOKEN=$token_logout; fi
+            export ZAP_ACCOUNT_TOKEN
+            rc=0
+            docker run --rm --network "container:$netns" -e ZAP_ACCOUNT_TOKEN -v "$PWD/zap/$scan:/zap/wrk" "$ZAP_IMAGE" \
+              zap-api-scan.py -t openapi.yaml -f openapi -c rules.tsv -P 8090 --hook=/zap/wrk/hooks.py -r report.html -J report.json 2>&1 | tee "zap/$scan/zap-output.txt" || rc=$?
+            echo "zap-api-scan $scan exit code $rc" | tee -a "zap/$scan/zap-output.txt"
+            [ "$rc" -le "$status" ] || status=$rc
+          done
+          exit "$status"
+
+      - name: Summarise the API scan
+        if: always()
+        working-directory: deploy
+        run: |
+          python3 - <<'PY' | tee -a "$GITHUB_STEP_SUMMARY"
+          import json, os, re
+          print('### OWASP ZAP API scan')
+          for scan in ('api', 'logout'):
+              folder = f'zap/{scan}'
+              if not os.path.exists(f'{folder}/zap-output.txt'):
+                  continue
+              text = open(f'{folder}/zap-output.txt', encoding='utf-8', errors='replace').read()
+              totals = re.findall(r'FAIL-NEW: \d+.*PASS: \d+', text)
+              print(f'**scan "{scan}"**: ' + (totals[-1] if totals else 'no result line'))
+              if os.path.exists(f'{folder}/report.json'):
+                  alerts = [a for site in json.load(open(f'{folder}/report.json')).get('site', []) for a in site.get('alerts', [])]
+                  if alerts:
+                      print('')
+                      print('| rule | alert | risk | instances |')
+                      print('|---|---|---|---|')
+                      for a in sorted(alerts, key=lambda x: x['pluginid']):
+                          print(f"| {a['pluginid']} | {a['name']} | {a['riskdesc']} | {a['count']} |")
+                  else:
+                      print('no alerts')
+              print('')
+          PY
+
+      - name: Keep the API scan report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: zap-api-report
+          path: |
+            deploy/zap/api/report.html
+            deploy/zap/api/report.json
+            deploy/zap/api/zap-output.txt
+            deploy/zap/logout/report.html
+            deploy/zap/logout/report.json
+            deploy/zap/logout/zap-output.txt
+          if-no-files-found: warn
+
+      - name: Stop the stack
+        if: always()
+        working-directory: deploy
+        run: docker compose down --volumes
 
       - name: Keep the results
         if: always()
