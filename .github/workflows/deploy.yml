@@ -81,4 +81,6 @@ jobs:
       # starts the stack. It refuses anything else.
       - name: Deploy
         run: |
+          # $TAG is expanded here on purpose: it is the argument of the forced command, and it was checked against ^sha-[0-9a-f]{40}$ above
+          # shellcheck disable=SC2029
           tar -c -C . deploy/docker-compose.yml deploy/db-init/10-schema.sh microvolts-db.sql | ssh vps "deploy $TAG"

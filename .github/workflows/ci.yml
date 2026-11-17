@@ -119,9 +119,9 @@ jobs:
 
       - name: Build the fuzz targets
         run: |
-          FLAGS="-std=c++2b -g -O1 -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=undefined -IExternalLibraries -ICommon -ICommon/include -ICommon/include/Utils"
-          clang++-18 $FLAGS Tools/fuzz/packet_fuzz.cpp Common/src/Protocol/TcpHeader.cpp -o packet_fuzz
-          clang++-18 $FLAGS Tools/fuzz/text_fuzz.cpp -lcryptopp -o text_fuzz
+          FLAGS=(-std=c++2b -g -O1 -fsanitize=fuzzer,address,undefined -fno-sanitize-recover=undefined -IExternalLibraries -ICommon -ICommon/include -ICommon/include/Utils)
+          clang++-18 "${FLAGS[@]}" Tools/fuzz/packet_fuzz.cpp Common/src/Protocol/TcpHeader.cpp -o packet_fuzz
+          clang++-18 "${FLAGS[@]}" Tools/fuzz/text_fuzz.cpp -lcryptopp -o text_fuzz
 
       - name: Fuzz the packet parser
         run: mkdir -p corpus/packet && ./packet_fuzz -max_total_time=60 -print_final_stats=1 -artifact_prefix=crash-packet- corpus/packet 2>&1 | tail -25 | tee packet-fuzz.txt
@@ -360,7 +360,7 @@ jobs:
       - name: Compose file renders (placeholders only)
         run: |
           TM_DOMAIN=example.invalid docker compose -f deploy/docker-compose.yml config --quiet
-          ! TM_DOMAIN= docker compose -f deploy/docker-compose.yml config --quiet 2>/dev/null
+          ! TM_DOMAIN='' docker compose -f deploy/docker-compose.yml config --quiet 2>/dev/null
 
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         if: always()
@@ -523,9 +523,12 @@ jobs:
             test "$(sql 'SELECT x FROM tm_marker')" = 42
             sql 'DROP TABLE tm_marker'
           } 2>&1 | tee -a ../smoke-test.txt
+          # the single quotes are meant: the loop and the substitutions run in the inner bash, which timeout starts
+          # shellcheck disable=SC2016
           timeout 180 bash -c 'for s in auth main cast; do until [ "$(docker inspect -f "{{.State.Health.Status}}" "$(docker compose ps -q $s)")" = healthy ]; do sleep 3; done; done'
           echo "== restart one server, it must come back healthy"
           docker compose restart main
+          # shellcheck disable=SC2016
           timeout 120 bash -c 'until [ "$(docker inspect -f "{{.State.Health.Status}}" "$(docker compose ps -q main)")" = healthy ]; do sleep 3; done'
           docker compose ps | tee -a ../smoke-test.txt
           docker compose logs --no-color --tail 40 | tee ../smoke-logs.txt > /dev/null
