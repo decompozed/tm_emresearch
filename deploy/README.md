@@ -16,7 +16,7 @@ dashboard and your SSH config also need the hostname, those you type by hand.
  backups: VPS -> encrypted dump -> R2 bucket (the private key is only on your laptop)
 ```
 
-Containers (one image `ghcr.io/decompozed/tm_emulator`, started three times with a different server name):
+Containers (one image `ghcr.io/decompozed/tm_emresearch`, started three times with a different server name):
 
 | container | what | notes |
 |---|---|---|
@@ -79,9 +79,9 @@ On your own machine:
     `gpg --export --armor <fingerprint> > backup-public.asc`. Keep the private key offline (and a backup of it); losing it means
     the backups cannot be read.
 
-GitHub (repository decompozed/tm_emulator):
+GitHub (repository decompozed/tm_emresearch):
 
-12. **Package visibility**: after the first push of the image, make the package `tm_emulator` public, or the VPS needs `docker login ghcr.io`
+12. **Package visibility**: after the first push of the image, make the package `tm_emresearch` public, or the VPS needs `docker login ghcr.io`
     with a read-only token.
 13. **Environment** `production` with required reviewers (the deploy job uses it).
 14. **Variables**: `DEPLOY_ENABLED=true` (this switches the deploy workflow on, until then it is skipped), `DEPLOY_SSH_HOST=ssh.<domain>`, `DEPLOY_USER=deploy`.
@@ -136,7 +136,7 @@ Host tm
 
 After that, deploys come from the pipeline: **Actions, Deploy to the VPS, Run workflow**, tag `sha-<40 hex of a commit on main>`. The CI key on
 the VPS can only run `tm-deploy.sh`, which accepts `deploy sha-<hex>`, takes two files on stdin, pulls that tag and starts it.
-By hand the same thing is `TM_IMAGE=ghcr.io/decompozed/tm_emulator:sha-<hex>` in `/opt/toymayhem/release/image.env`, then `docker compose --env-file ../tm.env --env-file image.env up -d`.
+By hand the same thing is `TM_IMAGE=ghcr.io/decompozed/tm_emresearch:sha-<hex>` in `/opt/toymayhem/release/image.env`, then `docker compose --env-file ../tm.env --env-file image.env up -d`.
 
 ### If you lose SSH (console fallback)
 
