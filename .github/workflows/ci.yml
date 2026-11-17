@@ -400,7 +400,7 @@ jobs:
             echo "== account API: a peer that is not the tunnel (the host, 172.28.0.1) is dropped"
             if curl -sS -m 10 http://172.28.0.10:8080/account/status; then echo "FAIL the host reached the API"; exit 1; else echo "dropped (good)"; fi
             # cloudflared shares the namespace of netns, so a curl container in that namespace connects the way the tunnel does
-            api() { docker run --rm --network "container:$(docker compose ps -q netns)" curlimages/curl:8.11.1 -sS -m 20 "$@"; }
+            api() { docker run --rm --network "container:$(docker compose ps -q netns)" curlimages/curl:8.11.1@sha256:c1fe1679c34d9784c1b0d1e5f62ac0a79fca01fb6377cdd33e90473c6f9f9a69 -sS -m 20 "$@"; }
             base=http://172.28.0.10:8080/account
             body() { printf '{"username":"%s","nickname":"%s","password":"%s","email":"%s@example.invalid","turnstile":"XXXX.DUMMY.TOKEN.XXXX"}' "$1" "$1" "$2" "$1"; }
             reg() { api -o /dev/null -w '%{http_code}' -H 'Content-Type: application/json' -H "CF-Connecting-IP: $1" -d "$(body "$2" "$3")" "$base/register"; }
