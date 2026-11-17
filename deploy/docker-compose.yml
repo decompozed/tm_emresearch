@@ -73,7 +73,7 @@ x-game: &game
 
 services:
   db:
-    image: mariadb:11.4
+    image: mariadb:11.4@sha256:5e73baf8179b29f115101bb102763a47a017361f3e9792daccba6646c3ab1532
     restart: unless-stopped
     user: "999:999"            # mysql from the start, so the image needs no root, setuid or chown
     read_only: true
@@ -178,7 +178,7 @@ services:
   # in the Cloudflare dashboard: api.<TM_DOMAIN>, path ^/account/, -> http://172.28.0.10:8080 (the value of TM_APP_IP).
   # The path matters: the same listener serves the staff commands (/ban, /announce, ...), which must stay off the internet.
   cloudflared:
-    image: cloudflare/cloudflared:2026.10.7
+    image: cloudflare/cloudflared:2026.10.7@sha256:4955524aeaa379e154023d5a027c250f7b35041a2e7e950cf13f144bc9b9c5ba
     restart: unless-stopped
     network_mode: "service:netns"
     user: "65532:65532"

@@ -9,7 +9,7 @@
 # Without it this stage is empty and everything is compiled from source.
 FROM scratch AS vcpkg-seed
 
-FROM ubuntu:24.04 AS builder
+FROM ubuntu:24.04@sha256:73b999393d07f2bf65a40373778a44dc9a6d54ad7718d29247d8ff9413c4d6a8 AS builder
 ENV DEBIAN_FRONTEND=noninteractive
 RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential gcc-14 g++-14 cmake ninja-build git curl zip unzip tar pkg-config python3 \
@@ -44,7 +44,7 @@ RUN cmake -B build -S . -G Ninja -DCMAKE_BUILD_TYPE=Release \
     && ls -l /out \
     && for f in /out/*.elf; do echo "== $f"; ldd "$f"; if ldd "$f" | grep -q "not found"; then exit 1; fi; done
 
-FROM ubuntu:24.04 AS runtime
+FROM ubuntu:24.04@sha256:73b999393d07f2bf65a40373778a44dc9a6d54ad7718d29247d8ff9413c4d6a8 AS runtime
 ENV DEBIAN_FRONTEND=noninteractive
 # Only what the servers need: CA certificates for SMTP over TLS. bash is in the base image.
 RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates \
