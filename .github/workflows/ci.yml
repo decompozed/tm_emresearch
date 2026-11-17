@@ -633,22 +633,91 @@ jobs:
           if-no-files-found: ignore
 
       - name: Save the tested image
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
         run: docker save "$IMAGE_LOCAL" | gzip -1 > tm_emulator-image.tar.gz
 
-      - name: Hand the tested image to the publish job
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      - name: Hand the tested image to the scan and publish jobs
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: image
           path: tm_emulator-image.tar.gz
           retention-days: 1
 
+  image-scan:
+    name: CVE scan of the built image (Grype)
+    runs-on: ubuntu-24.04
+    needs: image
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: image
+
+      # The exact image the smoke test ran and the publish job pushes. .grype.yaml (reviewed ignores, one reason each) is read from the workspace.
+      - name: Load the image
+        run: docker load --input tm_emulator-image.tar.gz
+
+      - name: Scan the image (Grype)
+        id: scan
+        uses: anchore/scan-action@27805bf3b4e84b4a5c980df22ed233c00390a439 # v7.4.2
+        with:
+          image: tm_emulator:ci
+          fail-build: false   # the next step decides, so the report and the summary are written first
+          output-format: json
+
+      - name: Table, summary and verdict (fails on high and critical)
+        env:
+          REPORT: ${{ steps.scan.outputs.json }}
+        run: |
+          cp "$REPORT" grype-image.json
+          python3 - <<'PY' | tee image-scan.txt >> "$GITHUB_STEP_SUMMARY"
+          import collections, json, sys
+          data = json.load(open('grype-image.json'))
+          rank = {'Critical': 0, 'High': 1, 'Medium': 2, 'Low': 3, 'Negligible': 4, 'Unknown': 5}
+          matches = sorted(data.get('matches', []), key=lambda m: (rank.get(m['vulnerability']['severity'], 9), m['vulnerability']['id']))
+          ignored = data.get('ignoredMatches', [])
+          counts = collections.Counter(m['vulnerability']['severity'] for m in matches)
+          print('### Image scan (Grype)')
+          print(f"{len(matches)} findings, {len(ignored)} suppressed by the reviewed ignore list (.grype.yaml)")
+          print('')
+          print('| severity | findings |')
+          print('|---|---|')
+          for severity in sorted(counts, key=lambda k: rank.get(k, 9)):
+              print(f'| {severity} | {counts[severity]} |')
+          print('')
+          print('| severity | vulnerability | package | installed | fixed in |')
+          print('|---|---|---|---|---|')
+          for m in matches:
+              if rank.get(m['vulnerability']['severity'], 9) <= 2:
+                  fixed = ', '.join(m['vulnerability'].get('fix', {}).get('versions', [])) or '-'
+                  print(f"| {m['vulnerability']['severity']} | {m['vulnerability']['id']} | {m['artifact']['name']} | {m['artifact']['version']} | {fixed} |")
+          if ignored:
+              print('')
+              print('Suppressed: ' + ', '.join(sorted({f"{m['vulnerability']['id']} ({m['artifact']['name']})" for m in ignored})))
+          failing = [m for m in matches if m['vulnerability']['severity'] in ('Critical', 'High')]
+          sys.stderr.write(f'{len(failing)} high or critical findings\n')
+          open('verdict.txt', 'w').write(str(len(failing)))
+          PY
+          test "$(cat verdict.txt)" = 0
+
+      - name: Keep the report
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: image-scan
+          path: |
+            grype-image.json
+            image-scan.txt
+          if-no-files-found: ignore
+
   publish-image:
     name: Publish the image (ghcr.io, main only)
     # Only pushes to main, and only when every other job of this run passed. Pull requests and branches never get here.
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: [image, build-test, sbom-scan, sast, fuzz, secret-scan]
+    needs: [image, image-scan, build-test, sbom-scan, license-check, host-scripts, workflows, sast, fuzz, secret-scan]
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     # The only job that can write to the registry
