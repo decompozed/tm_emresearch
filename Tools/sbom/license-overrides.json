@@ -1,0 +1,41 @@
+{
+  "overrides": [
+    {
+      "name": "libbcrypt",
+      "license": "MIT AND CC0-1.0 AND LicenseRef-Solar-Designer-PD",
+      "source": "ExternalLibraries/libbcrypt/LICENSE (MIT, trusch); src/bcrypt.c header (CC0-1.0, Ricardo Garcia); src/crypt_blowfish.c, src/crypt_gensalt.c, src/x86.S and include/bcrypt/crypt*.h headers (Solar Designer, public domain with a permissive fallback)"
+    },
+    {
+      "name": "libcppotp",
+      "license": "LicenseRef-Public-Domain",
+      "source": "ExternalLibraries/libcppotp/*.h headers: 'The contents of this file have been placed into the public domain' (the COPYING file they mention is not vendored)"
+    },
+    {
+      "name": "IniParser",
+      "license": "MIT",
+      "source": "ExternalLibraries/IniParser/inicpp.h header: 'License: MIT' (Fabian Meyer); no license file is vendored"
+    },
+    {
+      "name": "visit_struct",
+      "license": "BSL-1.0",
+      "source": "ExternalLibraries/visit_struct/visit_struct*.hpp headers: 'Distributed under the Boost Software License, Version 1.0' (Christopher Beck)"
+    },
+    {
+      "name": "picojson",
+      "license": "BSD-2-Clause",
+      "source": "upstream picojson.h v1.3.0 header (github.com/kazuho/picojson): 2-clause BSD text, Cybozu Labs and Kazuho Oku; the vcpkg port at the pinned baseline (ports/picojson/vcpkg.json) has no license field"
+    }
+  ],
+  "accepted": [
+    {
+      "name": "libmariadb",
+      "license": "LGPL-2.1-or-later",
+      "reason": "MariaDB Connector/C, unmodified from the pinned vcpkg baseline, linked statically (triplet x64-linux). The image is only deployed to the owner's own host; revisit before the binaries or the image are given to anyone else (LGPL relinking terms), see deploy/README.md step 12 about making the package public"
+    },
+    {
+      "name": "mariadb-connector-cpp",
+      "license": "LGPL-2.1-or-later",
+      "reason": "MariaDB Connector/C++, unmodified from the pinned vcpkg baseline, linked statically (triplet x64-linux). Same condition as libmariadb: the image is only deployed to the owner's own host; revisit before binaries or the image are given to anyone else"
+    }
+  ]
+}

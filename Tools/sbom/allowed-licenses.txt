@@ -1,0 +1,18 @@
+# Licenses (and license exceptions) that may be in the shipped server. One SPDX identifier per line, a reason after #.
+# Permissive licenses only: nothing here asks for the source of this project or limits how it is run.
+MIT              # permissive
+MIT-0            # permissive, no attribution
+BSD-2-Clause     # permissive
+BSD-3-Clause     # permissive
+Apache-2.0       # permissive, patent grant
+BSL-1.0          # Boost Software License, permissive
+ISC              # permissive
+Zlib             # permissive
+curl             # the curl license, permissive (MIT style)
+OpenSSL          # OpenSSL 1.x license, permissive with advertising clause
+Unlicense        # public domain dedication
+CC0-1.0          # public domain dedication
+blessing         # SQLite style public domain dedication
+# Reviewed references that are not on the SPDX list, each is described in license-overrides.json:
+LicenseRef-Solar-Designer-PD   # crypt_blowfish: public domain, with a fallback of "redistribution and use ... are permitted"
+LicenseRef-Public-Domain       # released into the public domain by the author
